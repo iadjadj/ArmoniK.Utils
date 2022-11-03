@@ -23,14 +23,14 @@ public class DeferTest
   [Test]
   public void DeferEmptyShouldWork()
   {
-    using var defer = Defer.Empty;
+    using var defer = Deferrer.Empty;
   }
 
   [Test]
   public void DeferShouldWork()
   {
     var i = 1;
-    using (Defer.Create(() => i += 1))
+    using (Deferrer.Create(() => i += 1))
     {
       Assert.That(i,
                   Is.EqualTo(1));
@@ -46,7 +46,7 @@ public class DeferTest
   {
     var i = 1;
 
-    var defer = Defer.Create(() => i += 1);
+    var defer = Deferrer.Create(() => i += 1);
 
     Assert.That(i,
                 Is.EqualTo(1));
@@ -68,7 +68,7 @@ public class DeferTest
     var i = 1;
 
     {
-      using var defer1 = Defer.Create(() => i += 1);
+      using var defer1 = Deferrer.Create(() => i += 1);
       using var defer2 = defer1;
 
       Assert.That(i,
@@ -91,7 +91,7 @@ public class DeferTest
 
     var weakRef = WeakRefDisposable(() =>
                                     {
-                                      reference = Defer.Create(() => i += 1);
+                                      reference = Deferrer.Create(() => i += 1);
                                       return reference;
                                     });
 
@@ -103,7 +103,7 @@ public class DeferTest
     Assert.That(i,
                 Is.EqualTo(1));
 
-    reference = Defer.Empty;
+    reference = Deferrer.Empty;
 
     GC.Collect();
     GC.WaitForPendingFinalizers();
@@ -119,7 +119,7 @@ public class DeferTest
   public void WrappedDeferShouldWork()
   {
     var i = 1;
-    using (new DisposableWrapper(Defer.Create(() => i += 1)))
+    using (new DisposableWrapper(Deferrer.Create(() => i += 1)))
     {
       Assert.That(i,
                   Is.EqualTo(1));

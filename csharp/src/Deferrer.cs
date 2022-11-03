@@ -24,13 +24,13 @@ namespace ArmoniK.Utils;
 /// <summary>
 ///   Wraps an action that will be called when the object is disposed
 /// </summary>
-public class Defer : IDisposable
+public class Deferrer : IDisposable
 {
   /// <summary>
   ///   A Disposable object that does nothing
   /// </summary>
   [PublicAPI]
-  public static readonly IDisposable Empty = new Defer();
+  public static readonly IDisposable Empty = new Deferrer();
 
   private Action? deferred_;
 
@@ -39,10 +39,10 @@ public class Defer : IDisposable
   /// </summary>
   /// <param name="deferred">Action to be called at Dispose</param>
   [PublicAPI]
-  public Defer(Action deferred)
+  public Deferrer(Action deferred)
     => deferred_ = deferred;
 
-  private Defer()
+  private Deferrer()
     => deferred_ = null;
 
   /// <inheritdoc />
@@ -63,7 +63,7 @@ public class Defer : IDisposable
     GC.SuppressFinalize(this);
   }
 
-  ~Defer()
+  ~Deferrer()
     => Dispose();
 
   /// <summary>
@@ -73,5 +73,5 @@ public class Defer : IDisposable
   /// <returns>Disposable object that calls deferred action when disposed</returns>
   [PublicAPI]
   public static IDisposable Create(Action deferred)
-    => new Defer(deferred);
+    => new Deferrer(deferred);
 }
