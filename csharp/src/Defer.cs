@@ -23,6 +23,8 @@
 // limitations under the License.
 
 
+using System.Diagnostics;
+
 using JetBrains.Annotations;
 
 namespace ArmoniK.Utils;
@@ -30,9 +32,15 @@ namespace ArmoniK.Utils;
 /// <summary>
 ///   Wraps an action that will be called when the object is disposed
 /// </summary>
-public readonly struct Defer : IDisposable
+public class Defer : IDisposable
 {
-  private readonly Action deferred_;
+  /// <summary>
+  ///   A Disposable object that does nothing
+  /// </summary>
+  [PublicAPI]
+  public static readonly IDisposable Empty = new Defer();
+
+  private Action? deferred_;
 
   /// <summary>
   ///   Constructs a Disposable object that calls a specific action when disposed
@@ -42,9 +50,29 @@ public readonly struct Defer : IDisposable
   public Defer(Action deferred)
     => deferred_ = deferred;
 
+  private Defer()
+    => deferred_ = null;
+
   /// <inheritdoc />
   public void Dispose()
-    => deferred_();
+  {
+    var deferred = deferred_;
+    if (deferred is null)
+    {
+      return;
+    }
+
+    deferred.Invoke();
+
+    // Check for race condition on Dispose
+    Debug.Assert(deferred_ is not null);
+
+    deferred_ = null;
+    GC.SuppressFinalize(this);
+  }
+
+  ~Defer()
+    => Dispose();
 
   /// <summary>
   ///   Constructs a Disposable object that calls a specific action when disposed
@@ -54,12 +82,4 @@ public readonly struct Defer : IDisposable
   [PublicAPI]
   public static IDisposable Create(Action deferred)
     => new Defer(deferred);
-
-  /// <summary>
-  ///   A Disposable object that does nothing
-  /// </summary>
-  [PublicAPI]
-  public static readonly IDisposable Empty = Create(() =>
-                                                    {
-                                                    });
 }

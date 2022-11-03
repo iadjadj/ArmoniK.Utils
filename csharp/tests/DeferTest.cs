@@ -46,9 +46,61 @@ public class DeferTest
 
     Assert.That(i,
                 Is.EqualTo(2));
+  }
+
+
+  [Test]
+  public void RedundantDeferShouldWork()
+  {
+    var i = 1;
+
+    var defer = Defer.Create(() => i += 1);
+
+    Assert.That(i,
+                Is.EqualTo(1));
+
+    defer.Dispose();
+
+    Assert.That(i,
+                Is.EqualTo(2));
+
+    defer.Dispose();
+
+    Assert.That(i,
+                Is.EqualTo(2));
+  }
+
+  private static WeakReference WeakRefDisposable(Func<IDisposable> f)
+    => new(f());
+
+  [Test]
+  public void DeferShouldWorkWhenCollected()
+  {
+    var i = 1;
+
+    IDisposable reference;
+
+    var weakRef = WeakRefDisposable(() =>
+                                    {
+                                      reference = Defer.Create(() => i += 1);
+                                      return reference;
+                                    });
 
     GC.Collect();
     GC.WaitForPendingFinalizers();
+
+    Assert.That(weakRef.IsAlive,
+                Is.True);
+    Assert.That(i,
+                Is.EqualTo(1));
+
+    reference = Defer.Empty;
+
+    GC.Collect();
+    GC.WaitForPendingFinalizers();
+
+    Assert.That(weakRef.IsAlive,
+                Is.False);
 
     Assert.That(i,
                 Is.EqualTo(2));
@@ -66,15 +118,9 @@ public class DeferTest
 
     Assert.That(i,
                 Is.EqualTo(2));
-
-    GC.Collect();
-    GC.WaitForPendingFinalizers();
-
-    Assert.That(i,
-                Is.EqualTo(2));
   }
 
-  private class DisposableWrapper : IDisposable
+  private sealed class DisposableWrapper : IDisposable
   {
     private readonly IDisposable disposable_;
 
