@@ -35,7 +35,7 @@ public sealed class Deferrer : IDisposable
   private Action? deferred_;
 
   /// <summary>
-  ///   Constructs a Disposable object that calls a specific action when disposed
+  ///   Constructs a Disposable object that calls <paramref name="deferred"/> when disposed
   /// </summary>
   /// <param name="deferred">Action to be called at Dispose</param>
   [PublicAPI]
@@ -65,7 +65,7 @@ public sealed class Deferrer : IDisposable
     => Dispose();
 
   /// <summary>
-  ///   Constructs a Disposable object that calls a specific action when disposed
+  ///   Constructs a Disposable object that calls <paramref name="deferred"/> when disposed
   /// </summary>
   /// <param name="deferred">Action to be called at Dispose time</param>
   /// <returns>Disposable object that calls deferred action when disposed</returns>
