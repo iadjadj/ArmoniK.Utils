@@ -48,18 +48,16 @@ public class Deferrer : IDisposable
   /// <inheritdoc />
   public void Dispose()
   {
-    var deferred = deferred_;
+    // Beware of race conditions:
+    // https://learn.microsoft.com/en-us/dotnet/standard/security/security-and-race-conditions#race-conditions-in-the-dispose-method
+    var deferred = Interlocked.Exchange(ref deferred_, null);
     if (deferred is null)
     {
       return;
     }
 
-    deferred.Invoke();
+    deferred();
 
-    // Check for race condition on Dispose
-    Debug.Assert(deferred_ is not null);
-
-    deferred_ = null;
     GC.SuppressFinalize(this);
   }
 
