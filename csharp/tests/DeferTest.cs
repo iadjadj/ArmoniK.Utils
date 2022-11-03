@@ -150,17 +150,9 @@ public class DeferTest
                 Is.EqualTo(2));
   }
 
-  private sealed class DisposableWrapper : IDisposable
+  private record DisposableWrapper(IDisposable Disposable) : IDisposable
   {
-    private readonly IDisposable disposable_;
-
-    public DisposableWrapper(IDisposable disposable)
-      => disposable_ = disposable;
-
     public void Dispose()
-      => disposable_.Dispose();
-
-    ~DisposableWrapper()
-      => Dispose();
+      => Disposable.Dispose();
   }
 }
