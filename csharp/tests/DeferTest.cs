@@ -70,6 +70,23 @@ public class DeferTest
                 Is.EqualTo(2));
   }
 
+  [Test]
+  public void RedundantCopyDeferShouldWork()
+  {
+    var i = 1;
+
+    {
+      using var defer1 = Defer.Create(() => i += 1);
+      using var defer2 = defer1;
+
+      Assert.That(i,
+                  Is.EqualTo(1));
+    }
+
+    Assert.That(i,
+                Is.EqualTo(2));
+  }
+
   private static WeakReference WeakRefDisposable(Func<IDisposable> f)
     => new(f());
 
