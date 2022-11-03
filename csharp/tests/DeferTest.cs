@@ -63,6 +63,27 @@ public class DeferTest
   }
 
   [Test]
+  public async Task DeferShouldBeRaceConditionFree()
+  {
+    var i = 1;
+
+    var defer = Deferrer.Create(() =>
+                                {
+                                  Thread.Sleep(100);
+                                  i += 1;
+                                });
+
+    var task1 = Task.Run(() => defer.Dispose());
+    var task2 = Task.Run(() => defer.Dispose());
+
+    await task1;
+    await task2;
+
+    Assert.That(i,
+                Is.EqualTo(2));
+  }
+
+  [Test]
   public void RedundantCopyDeferShouldWork()
   {
     var i = 1;
