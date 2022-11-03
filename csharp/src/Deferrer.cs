@@ -24,7 +24,7 @@ namespace ArmoniK.Utils;
 /// <summary>
 ///   Wraps an action that will be called when the object is disposed
 /// </summary>
-public class Deferrer : IDisposable
+public sealed class Deferrer : IDisposable
 {
   /// <summary>
   ///   A Disposable object that does nothing
