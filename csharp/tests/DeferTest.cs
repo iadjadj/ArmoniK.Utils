@@ -70,7 +70,7 @@ public class DeferTest
     var defer = Deferrer.Create(() =>
                                 {
                                   Thread.Sleep(100);
-                                  i += 1;
+                                  Interlocked.Increment(ref i);
                                 });
 
     var task1 = Task.Run(() => defer.Dispose());
