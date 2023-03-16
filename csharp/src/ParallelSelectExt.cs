@@ -31,7 +31,8 @@ public static class ParallelSelectExt
   /// <summary>
   ///   Iterates over the input enumerable and spawn multiple parallel tasks.
   ///   At most `parallelism` tasks will be running at any given time.
-  ///   If `parallelism` is 0 or negative, number of threads is used.
+  ///   If `parallelism` is 0, number of threads is used.
+  ///   If `parallelism` is negative, no limit is used.
   ///   All results are collected in-order.
   /// </summary>
   /// <param name="enumerable">Enumerable to iterate on</param>
@@ -44,49 +45,78 @@ public static class ParallelSelectExt
                                                           int                                        parallelism,
                                                           [EnumeratorCancellation] CancellationToken cancellationToken = default)
   {
-    // If parallelism is 0 or negative, use number of threads
-    if (parallelism < 1)
+    // If parallelism is 0, use number of threads
+    if (parallelism == 0)
     {
       parallelism = Environment.ProcessorCount;
     }
 
-    // cancellation task for early exit
-    var cancelled = cancellationToken.AsTask<T>();
-    // Circular buffer of tasks for the queue
-    var buffer = new Task<T>[parallelism];
-    // number of tasks processed
-    var n = 0;
-
-    foreach (var x in enumerable)
+    // If parallelism is negative, launch as many tasks as possible
+    if (parallelism < 0)
     {
-      var i = n % parallelism;
-
-      // We should dequeue tasks only if we enqueued enough
-      if (n >= parallelism)
-      {
-        // Dequeue a new task and wait for its result
-        // Early exit if cancellation is requested
-        yield return await Task.WhenAny(buffer[i],
-                                        cancelled)
-                               .Unwrap()
-                               .ConfigureAwait(false);
-      }
-
-      // Enqueue a new task
-      buffer[i] =  x;
-      n         += 1;
-
-      // not strictly required, but can help stop earlier if the enumerable is slow to move
-      cancellationToken.ThrowIfCancellationRequested();
+      parallelism = int.MaxValue;
     }
 
-    // Dequeue remaining tasks
-    for (var i = Math.Max(0,
-                          n - parallelism); i < n; i += 1)
+    // cancellation task for early exit
+    var cancelled = cancellationToken.AsTask<T>();
+    // Queue of tasks
+    var queue  = new Queue<Task<T>>();
+    // Semaphore to limit the parallelism
+    using var sem = new SemaphoreSlim(parallelism);
+
+    // Prepare acquire of the semaphore
+    var semAcquire = sem.WaitAsync(cancellationToken);
+
+    // Iterate over the enumerable
+    foreach (var x in enumerable)
+    {
+      // Dequeue tasks as long as the semaphore is not acquired yet
+      while (true) {
+        var front = queue.Count != 0 ? queue.Peek() : null;
+        // Select the first task to be ready
+        var which = await Task.WhenAny(cancelled, front ?? cancelled,
+                                       semAcquire)
+                              .ConfigureAwait(false);
+
+        // Cancellation has been requested
+        if (which.IsCanceled)
+        {
+          throw new TaskCanceledException();
+        }
+
+        // Semaphore has been acquired so we can enqueue a new task
+        if (ReferenceEquals(which,
+                            semAcquire))
+        {
+          break;
+        }
+
+        // Front task was ready, so we can get its result and yield it
+        yield return await queue.Dequeue().ConfigureAwait(false);
+      }
+
+      // Async closure that waits for the task x and releases the semaphore
+      async Task<T> TaskLambda()
+      {
+        var res = await x.ConfigureAwait(false);
+        x.Dispose();
+        sem.Release();
+        return res;
+      }
+
+      // We can enqueue the task
+      queue.Enqueue(TaskLambda());
+      // and prepare the new semaphore acquisition
+      semAcquire = sem.WaitAsync(cancellationToken);
+    }
+
+    // We finished iterating over the inputs and
+    // must now wait for all the tasks in the queue
+    foreach (var task in queue)
     {
       // Dequeue a new task and wait for its result
       // Early exit if cancellation is requested
-      yield return await Task.WhenAny(buffer[i % parallelism],
+      yield return await Task.WhenAny(task,
                                       cancelled)
                              .Unwrap()
                              .ConfigureAwait(false);
@@ -110,63 +140,110 @@ public static class ParallelSelectExt
                                                           int                                        parallelism,
                                                           [EnumeratorCancellation] CancellationToken cancellationToken = default)
   {
-    // If parallelism is 0 or negative, use number of threads
-    if (parallelism < 1)
+    // If parallelism is 0, use number of threads
+    if (parallelism == 0)
     {
       parallelism = Environment.ProcessorCount;
     }
 
+    // If parallelism is negative, launch as many tasks as possible
+    if (parallelism < 0)
+    {
+      parallelism = int.MaxValue;
+    }
+
     // cancellation tasks for early exit
-    var cancelledV = cancellationToken.AsTask<T>();
-    var cancelledB = cancellationToken.AsTask<bool>();
-    // Circular buffer of tasks for the queue
-    var buffer = new Task<T>[parallelism];
-    // number of tasks processed
-    var n = 0;
+    var cancelled = cancellationToken.AsTask<T>();
+    // Queue of tasks
+    var queue = new Queue<Task<T>>();
+    // Semaphore to limit the parallelism
+    using var sem = new SemaphoreSlim(parallelism);
+
+    // Prepare acquire of the semaphore
+    var semAcquire = sem.WaitAsync(cancellationToken);
 
     // Manual enumeration allow for overlapping gets and yields
     await using var enumerator = enumerable.GetAsyncEnumerator(cancellationToken);
     // Start first move
-    var moveTask = enumerator.MoveNextAsync()
+    var move = enumerator.MoveNextAsync()
                              .AsTask();
 
-    // Iterate over the enumerator, with early exit on cancellation
-    while (await Task.WhenAny(moveTask,
-                              cancelledB)
-                     .Unwrap()
-                     .ConfigureAwait(false))
+    // Current task that is ready: initialized to an invalid task as it will be overwritten before being awaited
+    var current = Task.FromException<T>(new InvalidOperationException("Unreachable"));
+    // what to do next: either semAcquire or move
+    Task next = move;
+
+    while (true)
     {
-      var x = enumerator.Current;
-      var i = n % parallelism;
+      var front = queue.Count != 0 ? queue.Peek() : null;
+      // Select the first task to be ready
+      var which = await Task.WhenAny(cancelled,
+                                     front ?? cancelled,
+                                     next);
 
-      // Start next move
-      moveTask = enumerator.MoveNextAsync()
-                           .AsTask();
-
-      // We should dequeue tasks only if we enqueued enough
-      if (n >= parallelism)
+      // Cancellation has been requested
+      if (which.IsCanceled)
       {
-        // Dequeue a new task and wait for its result
-        // Early exit if cancellation is requested
-        yield return await Task.WhenAny(buffer[i],
-                                        cancelledV)
-                               .Unwrap()
-                               .ConfigureAwait(false);
+        throw new TaskCanceledException();
       }
 
-      // Enqueue a new task
-      buffer[i] =  x;
-      n         += 1;
+      // Move has completed ("next iteration")
+      if (ReferenceEquals(which,
+                          move))
+      {
+        // Iteration has reached an end
+        if (!await move.ConfigureAwait(false))
+        {
+          break;
+        }
+
+        // Current task is now ready,
+        // so now we can enqueue it as soon as the semaphore is acquired
+        current = enumerator.Current;
+        move = enumerator.MoveNextAsync()
+                             .AsTask();
+        next = semAcquire;
+        continue;
+      }
+
+      // semaphore has been acquired so we can enqueue a new task
+      if (ReferenceEquals(which,
+                          semAcquire))
+      {
+        var x = current;
+        // Async closure that waits for the task x and releases the semaphore
+        async Task<T> TaskLambda()
+        {
+          var res = await x.ConfigureAwait(false);
+          x.Dispose();
+          sem.Release();
+          return res;
+        }
+        // We can enqueue the task
+        queue.Enqueue(TaskLambda());
+        // and prepare the new semaphore acquisition
+        semAcquire = sem.WaitAsync(cancellationToken);
+        // The next thing to do would now be to move to the next iteration
+        next   = move;
+        continue;
+      }
+
+      // Front task was ready, so we can get its result and yield it
+      if (ReferenceEquals(which,
+                          front))
+      {
+        yield return await queue.Dequeue().ConfigureAwait(false);
+      }
     }
 
-    // Dequeue remaining tasks
-    for (var i = Math.Max(0,
-                          n - parallelism); i < n; i += 1)
+    // We finished iterating over the inputs and
+    // must now wait for all the tasks in the queue
+    foreach (var task in queue)
     {
       // Dequeue a new task and wait for its result
       // Early exit if cancellation is requested
-      yield return await Task.WhenAny(buffer[i % parallelism],
-                                      cancelledV)
+      yield return await Task.WhenAny(task,
+                                      cancelled)
                              .Unwrap()
                              .ConfigureAwait(false);
     }
