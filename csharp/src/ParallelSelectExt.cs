@@ -60,21 +60,36 @@ public static class ParallelSelectExt
     // cancellation task for early exit
     var cancelled = cancellationToken.AsTask<T>();
     // Queue of tasks
-    var queue  = new Queue<Task<T>>();
+    var queue = new Queue<Task<T>>();
     // Semaphore to limit the parallelism
-    using var sem = new SemaphoreSlim(parallelism);
-
-    // Prepare acquire of the semaphore
-    var semAcquire = sem.WaitAsync(cancellationToken);
+    using var sem = new SemaphoreSlim(parallelism - 1, parallelism);
 
     // Iterate over the enumerable
     foreach (var x in enumerable)
     {
+      // Prepare the new semaphore acquisition
+      var semAcquire = sem.WaitAsync(cancellationToken);
+
+      // Async closure that waits for the task x and releases the semaphore
+      async Task<T> TaskLambda()
+      {
+        var res = await x.ConfigureAwait(false);
+        sem.Release();
+        return res;
+      }
+
+      // We can enqueue the task
+      queue.Enqueue(Task.Run(TaskLambda, cancellationToken));
+
       // Dequeue tasks as long as the semaphore is not acquired yet
-      while (true) {
-        var front = queue.Count != 0 ? queue.Peek() : null;
+      while (true)
+      {
+        var front = queue.Count != 0
+                      ? queue.Peek()
+                      : null;
         // Select the first task to be ready
-        var which = await Task.WhenAny(cancelled, front ?? cancelled,
+        var which = await Task.WhenAny(cancelled,
+                                       front ?? cancelled,
                                        semAcquire)
                               .ConfigureAwait(false);
 
@@ -92,22 +107,9 @@ public static class ParallelSelectExt
         }
 
         // Front task was ready, so we can get its result and yield it
-        yield return await queue.Dequeue().ConfigureAwait(false);
+        yield return await queue.Dequeue()
+                                .ConfigureAwait(false);
       }
-
-      // Async closure that waits for the task x and releases the semaphore
-      async Task<T> TaskLambda()
-      {
-        var res = await x.ConfigureAwait(false);
-        x.Dispose();
-        sem.Release();
-        return res;
-      }
-
-      // We can enqueue the task
-      queue.Enqueue(TaskLambda());
-      // and prepare the new semaphore acquisition
-      semAcquire = sem.WaitAsync(cancellationToken);
     }
 
     // We finished iterating over the inputs and
@@ -157,29 +159,32 @@ public static class ParallelSelectExt
     // Queue of tasks
     var queue = new Queue<Task<T>>();
     // Semaphore to limit the parallelism
-    using var sem = new SemaphoreSlim(parallelism);
+    using var sem = new SemaphoreSlim(parallelism - 1, parallelism);
 
     // Prepare acquire of the semaphore
     var semAcquire = sem.WaitAsync(cancellationToken);
 
     // Manual enumeration allow for overlapping gets and yields
     await using var enumerator = enumerable.GetAsyncEnumerator(cancellationToken);
-    // Start first move
-    var move = enumerator.MoveNextAsync()
-                             .AsTask();
 
-    // Current task that is ready: initialized to an invalid task as it will be overwritten before being awaited
-    var current = Task.FromException<T>(new InvalidOperationException("Unreachable"));
+    Task<bool> MoveNext()
+      => enumerator.MoveNextAsync()
+                   .AsTask();
+    // Start first move
+    var move = Task.Run(MoveNext, cancellationToken);
+
     // what to do next: either semAcquire or move
     Task next = move;
 
     while (true)
     {
-      var front = queue.Count != 0 ? queue.Peek() : null;
+      var front = queue.Count != 0
+                    ? queue.Peek()
+                    : null;
       // Select the first task to be ready
-      var which = await Task.WhenAny(cancelled,
+      var which = await Task.WhenAny(next,
                                      front ?? cancelled,
-                                     next);
+                                     cancelled);
 
       // Cancellation has been requested
       if (which.IsCanceled)
@@ -199,9 +204,19 @@ public static class ParallelSelectExt
 
         // Current task is now ready,
         // so now we can enqueue it as soon as the semaphore is acquired
-        current = enumerator.Current;
-        move = enumerator.MoveNextAsync()
-                             .AsTask();
+        var x = enumerator.Current;
+
+        // Async closure that waits for the task x and releases the semaphore
+        async Task<T> TaskLambda()
+        {
+          var res = await x.ConfigureAwait(false);
+          sem.Release();
+          return res;
+        }
+
+        // We can enqueue the task
+        queue.Enqueue(Task.Run(TaskLambda, cancellationToken));
+
         next = semAcquire;
         continue;
       }
@@ -210,21 +225,11 @@ public static class ParallelSelectExt
       if (ReferenceEquals(which,
                           semAcquire))
       {
-        var x = current;
-        // Async closure that waits for the task x and releases the semaphore
-        async Task<T> TaskLambda()
-        {
-          var res = await x.ConfigureAwait(false);
-          x.Dispose();
-          sem.Release();
-          return res;
-        }
-        // We can enqueue the task
-        queue.Enqueue(TaskLambda());
-        // and prepare the new semaphore acquisition
+        move = Task.Run(MoveNext, cancellationToken);
+        // prepare the new semaphore acquisition
         semAcquire = sem.WaitAsync(cancellationToken);
         // The next thing to do would now be to move to the next iteration
-        next   = move;
+        next = move;
         continue;
       }
 
@@ -232,8 +237,12 @@ public static class ParallelSelectExt
       if (ReferenceEquals(which,
                           front))
       {
-        yield return await queue.Dequeue().ConfigureAwait(false);
+        yield return await queue.Dequeue()
+                                .ConfigureAwait(false);
+        continue;
       }
+
+      throw new InvalidOperationException("Should never arrive there");
     }
 
     // We finished iterating over the inputs and
