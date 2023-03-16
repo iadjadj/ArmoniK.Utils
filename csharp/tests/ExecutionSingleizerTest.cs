@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -202,6 +203,41 @@ public class ExecutionSingleizerTest
 
     Assert.That(val_,
                 Is.EqualTo(0));
+  }
+
+  [Test]
+  public async Task CheckExpire()
+  {
+    var single = new ExecutionSingleizer<int>(TimeSpan.FromMilliseconds(100));
+    var i = await single.Call(ct => Set(1,
+                                        0,
+                                        ct))
+                        .ConfigureAwait(false);
+    Assert.AreEqual(1,
+                    i);
+    Assert.AreEqual(1,
+                    val_);
+
+    i = await single.Call(ct => Set(2,
+                                    0,
+                                    ct))
+                    .ConfigureAwait(false);
+    Assert.AreEqual(1,
+                    i);
+    Assert.AreEqual(1,
+                    val_);
+
+    await Task.Delay(150)
+              .ConfigureAwait(false);
+
+    i = await single.Call(ct => Set(3,
+                                    0,
+                                    ct))
+                    .ConfigureAwait(false);
+    Assert.AreEqual(3,
+                    i);
+    Assert.AreEqual(3,
+                    val_);
   }
 
   private async Task<int> Set(int               i,
