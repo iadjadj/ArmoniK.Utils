@@ -111,7 +111,7 @@ public class ExecutionSingleizer<T> : IDisposable
         // Record current thread as waiting for the task
         Interlocked.Increment(ref currentHandle.Waiters);
 
-        // The handle as been replaced by another thread, so we can just wait for the task
+        // The handle has been replaced by another thread, so we can just wait for the task
         // in this new handle to get the result.
         // The handle created by the current thread can be destroyed as it is not used by anything.
         // Before destroying the task, it must be complete (ran, faulted or cancelled).
