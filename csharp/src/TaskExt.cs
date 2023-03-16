@@ -16,6 +16,7 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 using JetBrains.Annotations;
@@ -107,4 +108,30 @@ public static class TaskExt
   [PublicAPI]
   public static async Task<List<T>> ToListAsync<T>(this Task<IEnumerable<T>> enumerableTask)
     => (await enumerableTask.ConfigureAwait(false)).ToList();
+
+  /// <summary>
+  ///   Convert a Cancellation Token into a Task.
+  ///   The task will wait for the cancellation token to be cancelled and throw an exception.
+  /// </summary>
+  /// <param name="cancellationToken">Cancellation Token to convert</param>
+  /// <typeparam name="T">Type of the (unused) result of the task</typeparam>
+  /// <returns>Task that will be completed upon cancellation</returns>
+  [PublicAPI]
+  public static Task<T> AsTask<T>(this CancellationToken cancellationToken)
+  {
+    var tcs = new TaskCompletionSource<T>();
+    cancellationToken.Register(() => tcs.SetCanceled());
+    return tcs.Task;
+  }
+
+  /// <summary>
+  ///   Convert a Cancellation Token into a Task.
+  ///   The task will wait for the cancellation token to be cancelled and throw an exception.
+  /// </summary>
+  /// <param name="cancellationToken">Cancellation Token to convert</param>
+  /// <typeparam name="T">Type of the (unused) result of the task</typeparam>
+  /// <returns>Task that will be completed upon cancellation</returns>
+  [PublicAPI]
+  public static Task AsTask(this CancellationToken cancellationToken)
+    => cancellationToken.AsTask<int>();
 }

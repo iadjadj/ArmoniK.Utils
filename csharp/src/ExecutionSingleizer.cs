@@ -140,15 +140,9 @@ public class ExecutionSingleizer<T> : IDisposable
     // Wait for task.
     try
     {
-      // Allow for early exit.
-      var tcs = new TaskCompletionSource<T>();
-
-      // Early exit if the current cancellationToken is cancelled.
-      cancellationToken.Register(() => tcs.SetCanceled());
-
       // Wait for either the task to finish, or the cancellation token to be cancelled.
       return await Task.WhenAny(task,
-                                tcs.Task)
+                                cancellationToken.AsTask<T>())
                        .Unwrap()
                        .ConfigureAwait(false);
     }
