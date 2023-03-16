@@ -15,6 +15,7 @@
 // limitations under the License.
 
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -114,24 +115,45 @@ public class ExecutionSingleizerTest
   [Test]
   public async Task ManyConcurrentExecutionShouldSucceed()
   {
-    var n     = 1000000;
-    var tasks = new Task<int>[n];
+    var n = 10000000;
+
+    var tasks = Enumerable.Range(0,
+                                 n)
+                          .Select(i => single_!.Call(ct => Set(i,
+                                                               0,
+                                                               ct)))
+                          .ToList();
+    var results = await Task.WhenAll(tasks)
+                            .ConfigureAwait(false);
 
     for (var i = 0; i < n; ++i)
     {
-      var i2 = i;
-      tasks[i] = single_!.Call(ct => Set(i2,
-                                         0,
-                                         ct));
-    }
-
-    for (var i = 0; i < n; ++i)
-    {
-      var j = await tasks[i]
-                .ConfigureAwait(false);
+      var j = results[i];
       Assert.GreaterOrEqual(i,
                             j);
     }
+  }
+
+
+  [Test]
+  public async Task ManyThreadedConcurrentExecutionShouldSucceed()
+  {
+    var n = 10000000;
+
+    var tasks = Enumerable.Range(0,
+                                 n)
+                          .AsParallel()
+                          .WithExecutionMode(ParallelExecutionMode.ForceParallelism)
+                          .Select(i => single_!.Call(ct => Set(i,
+                                                               0,
+                                                               ct)))
+                          .ToList();
+    var results = tasks.AsParallel()
+                       .Select(task => task.Result);
+
+    Assert.That(results,
+                Is.All.InRange(0,
+                               n));
   }
 
   [Test]
@@ -213,19 +235,19 @@ public class ExecutionSingleizerTest
                                         0,
                                         ct))
                         .ConfigureAwait(false);
-    Assert.AreEqual(1,
-                    i);
-    Assert.AreEqual(1,
-                    val_);
+    Assert.That(i,
+                Is.EqualTo(1));
+    Assert.That(val_,
+                Is.EqualTo(1));
 
     i = await single.Call(ct => Set(2,
                                     0,
                                     ct))
                     .ConfigureAwait(false);
-    Assert.AreEqual(1,
-                    i);
-    Assert.AreEqual(1,
-                    val_);
+    Assert.That(i,
+                Is.EqualTo(1));
+    Assert.That(val_,
+                Is.EqualTo(1));
 
     await Task.Delay(150)
               .ConfigureAwait(false);
@@ -234,16 +256,18 @@ public class ExecutionSingleizerTest
                                     0,
                                     ct))
                     .ConfigureAwait(false);
-    Assert.AreEqual(3,
-                    i);
-    Assert.AreEqual(3,
-                    val_);
+    Assert.That(i,
+                Is.EqualTo(3));
+    Assert.That(val_,
+                Is.EqualTo(3));
   }
 
   private async Task<int> Set(int               i,
                               int               delay,
                               CancellationToken cancellationToken)
   {
+    Assert.That(cancellationToken.IsCancellationRequested,
+                Is.False);
     if (delay > 0)
     {
       await Task.Delay(delay,

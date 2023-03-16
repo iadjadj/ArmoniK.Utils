@@ -66,8 +66,10 @@ public class ExecutionSingleizer<T> : IDisposable
     if (currentHandle.Waiters == 0 && Stopwatch.GetTimestamp() > currentHandle.ValidUntil)
     {
       // Prepare new handle, with new cancellation token source and new task
-      var cts         = new CancellationTokenSource();
-      var delayedTask = new Task<Task<T>>(() => func(cts.Token));
+      var cts = new CancellationTokenSource();
+      var delayedTask = new Task<Task<T>>(() => cts.IsCancellationRequested
+                                                  ? Task.FromCanceled<T>(cts.Token)
+                                                  : func(cts.Token));
 
       var newHandle = new Handle
                       {
@@ -93,18 +95,38 @@ public class ExecutionSingleizer<T> : IDisposable
         delayedTask.Start();
         currentHandle = newHandle;
 
-        // There is no need increment number of waiters as it has been initialized to 1.
+        // The task might not have finished yet. If that is the case, let the GC do the job.
+        if (previousHandle.InnerTask.IsCompleted)
+        {
+          // Dispose of the underlying task here is fine:
+          // https://devblogs.microsoft.com/pfxteam/do-i-need-to-dispose-of-tasks/
+          previousHandle.InnerTask.Dispose();
+
+          // Dispose of the CancellationTokenSource should be fine,
+          // but we appear to have a race condition here so we skip it
+        }
       }
       else
       {
+        // Record current thread as waiting for the task
+        Interlocked.Increment(ref currentHandle.Waiters);
+
         // The handle as been replaced by another thread, so we can just wait for the task
         // in this new handle to get the result.
         // The handle created by the current thread can be destroyed as it is not used by anything.
+        // Before destroying the task, it must be complete (ran, faulted or cancelled).
+        cts.Cancel();
+        delayedTask.Start();
+        try
+        {
+          await newHandle.InnerTask.ConfigureAwait(false);
+        }
+        catch (TaskCanceledException)
+        {
+        }
+
         newHandle.Dispose();
         currentHandle = previousHandle;
-
-        // Record current thread as waiting for the task
-        Interlocked.Increment(ref currentHandle.Waiters);
       }
     }
     else
@@ -148,19 +170,6 @@ public class ExecutionSingleizer<T> : IDisposable
         // If we enter here because the task has completed without errors,
         // cancelling is a no op, therefore, we do not need to check why we went here.
         currentHandle.CancellationTokenSource.Cancel();
-
-        // FIXME: There might be a race condition between the dispose and the cancel here.
-        // ManyConcurrentExecutionShouldSucceed fails with:
-        //   `System.ObjectDisposedException : The CancellationTokenSource has been disposed.`
-        // As soon as we understand where it comes from, we can reenable early dispose.
-
-        //// The task might not have finished yet. If that is the case, let the GC do the job.
-        //if (currentHandle.InnerTask.IsCompleted)
-        //{
-        //  // Dispose of the Handle (and therefore the underlying task) here is fine:
-        //  // https://devblogs.microsoft.com/pfxteam/do-i-need-to-dispose-of-tasks/
-        //  currentHandle.Dispose();
-        //}
       }
     }
   }
