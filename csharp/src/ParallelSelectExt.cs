@@ -86,7 +86,7 @@ public static class ParallelSelectExt
     {
       // Dequeue a new task and wait for its result
       // Early exit if cancellation is requested
-      yield return await Task.WhenAny(buffer[i],
+      yield return await Task.WhenAny(buffer[i % parallelism],
                                       cancelled)
                              .Unwrap()
                              .ConfigureAwait(false);
@@ -165,7 +165,7 @@ public static class ParallelSelectExt
     {
       // Dequeue a new task and wait for its result
       // Early exit if cancellation is requested
-      yield return await Task.WhenAny(buffer[i],
+      yield return await Task.WhenAny(buffer[i % parallelism],
                                       cancelledV)
                              .Unwrap()
                              .ConfigureAwait(false);
