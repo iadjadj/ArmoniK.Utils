@@ -17,7 +17,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -25,44 +24,84 @@ using JetBrains.Annotations;
 
 namespace ArmoniK.Utils;
 
+/// <summary>
+///   Options for ParallelSelect and ParallelWait
+/// </summary>
+[PublicAPI]
+public struct ParallelTaskOptions
+{
+  /// <summary>Limit the parallelism for ParallelSelect and ParallelWait</summary>
+  public int ParallelismLimit { get; }
+
+  /// <summary>Cancellation token used for stopping the enumeration</summary>
+  public CancellationToken CancellationToken { get; }
+
+  /// <summary>
+  ///   Options for ParallelSelect and ParallelWait.
+  ///   If parallelismLimit is 0, the number of threads is used as the limit.
+  ///   If parallelismLimit is negative, no limit is enforced.
+  /// </summary>
+  /// <param name="parallelismLimit">Limit the parallelism</param>
+  /// <param name="cancellationToken">Cancellation token used for stopping the enumeration</param>
+  public ParallelTaskOptions(int               parallelismLimit,
+                             CancellationToken cancellationToken = default)
+  {
+    ParallelismLimit = parallelismLimit switch
+                       {
+                         < 0 => int.MaxValue,
+                         0   => Environment.ProcessorCount,
+                         _   => parallelismLimit,
+                       };
+    CancellationToken = cancellationToken;
+  }
+
+  /// <summary>
+  ///   Options for ParallelSelect and ParallelWait.
+  ///   Parallelism is limited to the number of threads.
+  /// </summary>
+  public ParallelTaskOptions()
+    : this(0)
+  {
+  }
+
+  /// <summary>
+  ///   Options for ParallelSelect and ParallelWait.
+  ///   Parallelism is limited to the number of threads.
+  /// </summary>
+  /// <param name="cancellationToken">Cancellation token used for stopping the enumeration</param>
+  public ParallelTaskOptions(CancellationToken cancellationToken)
+    : this(0,
+           cancellationToken)
+  {
+  }
+}
+
 [PublicAPI]
 public static class ParallelSelectExt
 {
   /// <summary>
   ///   Iterates over the input enumerable and spawn multiple parallel tasks.
-  ///   At most `parallelism` tasks will be running at any given time.
-  ///   If `parallelism` is 0, number of threads is used.
-  ///   If `parallelism` is negative, no limit is used.
+  ///   The maximum number of tasks in flight at any given moment is given in the `parallelTaskOptions`.
   ///   All results are collected in-order.
   /// </summary>
   /// <param name="enumerable">Enumerable to iterate on</param>
-  /// <param name="parallelism">Maximum number of parallel tasks to be spawned at any moment</param>
-  /// <param name="cancellationToken">Token to cancel the enumeration</param>
+  /// <param name="parallelTaskOptions">Options (eg: parallelismLimit, cancellationToken)</param>
   /// <typeparam name="T">Return type of the tasks</typeparam>
   /// <returns>Asynchronous results of tasks</returns>
   [PublicAPI]
-  public static async IAsyncEnumerable<T> ParallelWait<T>(this IEnumerable<Task<T>>                  enumerable,
-                                                          int                                        parallelism,
-                                                          [EnumeratorCancellation] CancellationToken cancellationToken = default)
+  public static async IAsyncEnumerable<T> ParallelWait<T>(this IEnumerable<Task<T>> enumerable,
+                                                          ParallelTaskOptions       parallelTaskOptions = default)
   {
-    // If parallelism is 0, use number of threads
-    if (parallelism == 0)
-    {
-      parallelism = Environment.ProcessorCount;
-    }
-
-    // If parallelism is negative, launch as many tasks as possible
-    if (parallelism < 0)
-    {
-      parallelism = int.MaxValue;
-    }
+    var parallelism       = parallelTaskOptions.ParallelismLimit;
+    var cancellationToken = parallelTaskOptions.CancellationToken;
 
     // cancellation task for early exit
     var cancelled = cancellationToken.AsTask<T>();
     // Queue of tasks
     var queue = new Queue<Task<T>>();
     // Semaphore to limit the parallelism
-    using var sem = new SemaphoreSlim(parallelism - 1, parallelism);
+    using var sem = new SemaphoreSlim(parallelism - 1,
+                                      parallelism);
 
     // Iterate over the enumerable
     foreach (var x in enumerable)
@@ -79,7 +118,8 @@ public static class ParallelSelectExt
       }
 
       // We can enqueue the task
-      queue.Enqueue(Task.Run(TaskLambda, cancellationToken));
+      queue.Enqueue(Task.Run(TaskLambda,
+                             cancellationToken));
 
       // Dequeue tasks as long as the semaphore is not acquired yet
       while (true)
@@ -128,38 +168,27 @@ public static class ParallelSelectExt
 
   /// <summary>
   ///   Iterates over the input enumerable and spawn multiple parallel tasks.
-  ///   At most `parallelism` tasks will be running at any given time.
-  ///   If `parallelism` is 0 or negative, number of threads is used.
+  ///   The maximum number of tasks in flight at any given moment is given in the `parallelTaskOptions`.
   ///   All results are collected in-order.
   /// </summary>
   /// <param name="enumerable">Enumerable to iterate on</param>
-  /// <param name="parallelism">Maximum number of parallel tasks to be spawned at any moment</param>
-  /// <param name="cancellationToken">Token to cancel the enumeration</param>
+  /// <param name="parallelTaskOptions">Options (eg: parallelismLimit, cancellationToken)</param>
   /// <typeparam name="T">Return type of the tasks</typeparam>
   /// <returns>Asynchronous results of tasks</returns>
   [PublicAPI]
-  public static async IAsyncEnumerable<T> ParallelWait<T>(this IAsyncEnumerable<Task<T>>             enumerable,
-                                                          int                                        parallelism,
-                                                          [EnumeratorCancellation] CancellationToken cancellationToken = default)
+  public static async IAsyncEnumerable<T> ParallelWait<T>(this IAsyncEnumerable<Task<T>> enumerable,
+                                                          ParallelTaskOptions            parallelTaskOptions = default)
   {
-    // If parallelism is 0, use number of threads
-    if (parallelism == 0)
-    {
-      parallelism = Environment.ProcessorCount;
-    }
-
-    // If parallelism is negative, launch as many tasks as possible
-    if (parallelism < 0)
-    {
-      parallelism = int.MaxValue;
-    }
+    var parallelism       = parallelTaskOptions.ParallelismLimit;
+    var cancellationToken = parallelTaskOptions.CancellationToken;
 
     // cancellation tasks for early exit
     var cancelled = cancellationToken.AsTask<T>();
     // Queue of tasks
     var queue = new Queue<Task<T>>();
     // Semaphore to limit the parallelism
-    using var sem = new SemaphoreSlim(parallelism - 1, parallelism);
+    using var sem = new SemaphoreSlim(parallelism - 1,
+                                      parallelism);
 
     // Prepare acquire of the semaphore
     var semAcquire = sem.WaitAsync(cancellationToken);
@@ -170,8 +199,10 @@ public static class ParallelSelectExt
     Task<bool> MoveNext()
       => enumerator.MoveNextAsync()
                    .AsTask();
+
     // Start first move
-    var move = Task.Run(MoveNext, cancellationToken);
+    var move = Task.Run(MoveNext,
+                        cancellationToken);
 
     // what to do next: either semAcquire or move
     Task next = move;
@@ -215,7 +246,8 @@ public static class ParallelSelectExt
         }
 
         // We can enqueue the task
-        queue.Enqueue(Task.Run(TaskLambda, cancellationToken));
+        queue.Enqueue(Task.Run(TaskLambda,
+                               cancellationToken));
 
         next = semAcquire;
         continue;
@@ -225,7 +257,8 @@ public static class ParallelSelectExt
       if (ReferenceEquals(which,
                           semAcquire))
       {
-        move = Task.Run(MoveNext, cancellationToken);
+        move = Task.Run(MoveNext,
+                        cancellationToken);
         // prepare the new semaphore acquisition
         semAcquire = sem.WaitAsync(cancellationToken);
         // The next thing to do would now be to move to the next iteration
@@ -258,83 +291,41 @@ public static class ParallelSelectExt
     }
   }
 
-
-  /// <summary>
-  ///   Iterates over the input enumerable and spawn multiple parallel tasks.
-  ///   At most "number of thread" tasks will be running at any given time.
-  ///   All results are collected in-order.
-  /// </summary>
-  /// <param name="enumerable">Enumerable to iterate on</param>
-  /// <param name="cancellationToken">Token to cancel the enumeration</param>
-  /// <typeparam name="T">Return type of the tasks</typeparam>
-  /// <returns>Asynchronous results of tasks</returns>
-  [PublicAPI]
-  public static IAsyncEnumerable<T> ParallelWait<T>(this IEnumerable<Task<T>> enumerable,
-                                                    CancellationToken         cancellationToken = default)
-    => ParallelWait(enumerable,
-                    0,
-                    cancellationToken);
-
-  /// <summary>
-  ///   Iterates over the input enumerable and spawn multiple parallel tasks.
-  ///   At most "number of thread" tasks will be running at any given time.
-  ///   All results are collected in-order.
-  /// </summary>
-  /// <param name="enumerable">Enumerable to iterate on</param>
-  /// <param name="cancellationToken">Token to cancel the enumeration</param>
-  /// <typeparam name="T">Return type of the tasks</typeparam>
-  /// <returns>Asynchronous results of tasks</returns>
-  [PublicAPI]
-  public static IAsyncEnumerable<T> ParallelWait<T>(this IAsyncEnumerable<Task<T>> enumerable,
-                                                    CancellationToken              cancellationToken = default)
-    => ParallelWait(enumerable,
-                    0,
-                    cancellationToken);
-
-
   /// <summary>
   ///   Iterates over the input enumerable and spawn multiple parallel tasks that call `func`.
-  ///   At most `parallelism` tasks will be running at any given time.
-  ///   If `parallelism` is 0 or negative, number of threads is used.
+  ///   The maximum number of tasks in flight at any given moment is given in the `parallelTaskOptions`.
   ///   All results are collected in-order.
   /// </summary>
   /// <param name="enumerable">Enumerable to iterate on</param>
-  /// <param name="parallelism">Maximum number of parallel tasks to be spawned at any moment</param>
+  /// <param name="parallelTaskOptions">Options (eg: parallelismLimit, cancellationToken)</param>
   /// <param name="func">Function to spawn on the enumerable input</param>
-  /// <param name="cancellationToken">Token to cancel the enumeration</param>
   /// <typeparam name="TU">Type of the inputs</typeparam>
   /// <typeparam name="TV">Type of the outputs</typeparam>
   /// <returns>Asynchronous results of func over the inputs</returns>
   [PublicAPI]
   public static IAsyncEnumerable<TV> ParallelSelect<TU, TV>(this IEnumerable<TU> enumerable,
-                                                            int                  parallelism,
-                                                            Func<TU, Task<TV>>   func,
-                                                            CancellationToken    cancellationToken = default)
+                                                            ParallelTaskOptions  parallelTaskOptions,
+                                                            Func<TU, Task<TV>>   func)
     => ParallelWait(enumerable.Select(func),
-                    parallelism,
-                    cancellationToken);
+                    parallelTaskOptions);
 
   /// <summary>
   ///   Iterates over the input enumerable and spawn multiple parallel tasks that call `func`.
-  ///   At most `parallelism` tasks will be running at any given time.
-  ///   If `parallelism` is 0 or negative, number of threads is used.
+  ///   The maximum number of tasks in flight at any given moment is given in the `parallelTaskOptions`.
   ///   All results are collected in-order.
   /// </summary>
   /// <param name="enumerable">Enumerable to iterate on</param>
-  /// <param name="parallelism">Maximum number of parallel tasks to be spawned at any moment</param>
+  /// <param name="parallelTaskOptions">Options (eg: parallelismLimit, cancellationToken)</param>
   /// <param name="func">Function to spawn on the enumerable input</param>
-  /// <param name="cancellationToken">Token to cancel the enumeration</param>
   /// <typeparam name="TU">Type of the inputs</typeparam>
   /// <typeparam name="TV">Type of the outputs</typeparam>
   /// <returns>Asynchronous results of func over the inputs</returns>
   [PublicAPI]
   public static IAsyncEnumerable<TV> ParallelSelect<TU, TV>(this IAsyncEnumerable<TU> enumerable,
-                                                            int                       parallelism,
-                                                            Func<TU, Task<TV>>        func,
-                                                            CancellationToken         cancellationToken = default)
+                                                            ParallelTaskOptions       parallelTaskOptions,
+                                                            Func<TU, Task<TV>>        func)
     => ParallelWait(enumerable.Select(func),
-                    parallelism,
-                    cancellationToken);
+                    parallelTaskOptions);
 
   /// <summary>
   ///   Iterates over the input enumerable and spawn multiple parallel tasks that call `func`.
@@ -343,16 +334,13 @@ public static class ParallelSelectExt
   /// </summary>
   /// <param name="enumerable">Enumerable to iterate on</param>
   /// <param name="func">Function to spawn on the enumerable input</param>
-  /// <param name="cancellationToken">Token to cancel the enumeration</param>
   /// <typeparam name="TU">Type of the inputs</typeparam>
   /// <typeparam name="TV">Type of the outputs</typeparam>
   /// <returns>Asynchronous results of func over the inputs</returns>
   [PublicAPI]
   public static IAsyncEnumerable<TV> ParallelSelect<TU, TV>(this IEnumerable<TU> enumerable,
-                                                            Func<TU, Task<TV>>   func,
-                                                            CancellationToken    cancellationToken = default)
-    => ParallelWait(enumerable.Select(func),
-                    cancellationToken);
+                                                            Func<TU, Task<TV>>   func)
+    => ParallelWait(enumerable.Select(func));
 
   /// <summary>
   ///   Iterates over the input enumerable and spawn multiple parallel tasks that call `func`.
@@ -361,14 +349,11 @@ public static class ParallelSelectExt
   /// </summary>
   /// <param name="enumerable">Enumerable to iterate on</param>
   /// <param name="func">Function to spawn on the enumerable input</param>
-  /// <param name="cancellationToken">Token to cancel the enumeration</param>
   /// <typeparam name="TU">Type of the inputs</typeparam>
   /// <typeparam name="TV">Type of the outputs</typeparam>
   /// <returns>Asynchronous results of func over the inputs</returns>
   [PublicAPI]
   public static IAsyncEnumerable<TV> ParallelSelect<TU, TV>(this IAsyncEnumerable<TU> enumerable,
-                                                            Func<TU, Task<TV>>        func,
-                                                            CancellationToken         cancellationToken = default)
-    => ParallelWait(enumerable.Select(func),
-                    cancellationToken);
+                                                            Func<TU, Task<TV>>        func)
+    => ParallelWait(enumerable.Select(func));
 }

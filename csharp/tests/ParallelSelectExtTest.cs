@@ -28,69 +28,115 @@ namespace ArmoniK.Utils.Tests;
 public class ParallelSelectExtTest
 {
   [Test]
-  [TestCase(-1, 0)]
-  [TestCase(-1, 1)]
-  [TestCase(-1, 4)]
-  [TestCase(-1, 1000)]
-  [TestCase(0,  0)]
-  [TestCase(0,  1)]
-  [TestCase(0,  4)]
-  [TestCase(0,  100)]
-  [TestCase(1,  0)]
-  [TestCase(1,  1)]
-  [TestCase(1,  4)]
-  [TestCase(1,  10)]
-  [TestCase(2,  0)]
-  [TestCase(2,  1)]
-  [TestCase(2,  4)]
-  [TestCase(2,  20)]
-  public async Task ParallelSelectShouldWork(int parallelism, int n)
+  [TestCase(-1,
+            0)]
+  [TestCase(-1,
+            1)]
+  [TestCase(-1,
+            4)]
+  [TestCase(-1,
+            1000)]
+  [TestCase(0,
+            0)]
+  [TestCase(0,
+            1)]
+  [TestCase(0,
+            4)]
+  [TestCase(0,
+            100)]
+  [TestCase(1,
+            0)]
+  [TestCase(1,
+            1)]
+  [TestCase(1,
+            4)]
+  [TestCase(1,
+            10)]
+  [TestCase(2,
+            0)]
+  [TestCase(2,
+            1)]
+  [TestCase(2,
+            4)]
+  [TestCase(2,
+            20)]
+  public async Task ParallelSelectShouldWork(int parallelism,
+                                             int n)
   {
     var x = await GenerateInts(n)
-            .ParallelSelect(parallelism,
-                            AsyncIdentity(10))
-            .ToListAsync().ConfigureAwait(false);
-    var y = GenerateInts(n)
-      .ToList();
-    Assert.That(x, Is.EqualTo(y));
-  }
-
-  [Test]
-  [TestCase(-1, 0)]
-  [TestCase(-1, 1)]
-  [TestCase(-1, 4)]
-  [TestCase(-1, 1000)]
-  [TestCase(0, 0)]
-  [TestCase(0, 1)]
-  [TestCase(0, 4)]
-  [TestCase(0, 100)]
-  [TestCase(1, 0)]
-  [TestCase(1, 1)]
-  [TestCase(1, 4)]
-  [TestCase(1, 10)]
-  [TestCase(2, 0)]
-  [TestCase(2, 1)]
-  [TestCase(2, 4)]
-  [TestCase(2, 20)]
-  public async Task ParallelSelectAsyncShouldWork(int parallelism, int n)
-  {
-    var x = await GenerateIntsAsync(n, 10)
-                  .ParallelSelect(parallelism,
+                  .ParallelSelect(new ParallelTaskOptions(parallelism),
                                   AsyncIdentity(10))
-                  .ToListAsync().ConfigureAwait(false);
+                  .ToListAsync()
+                  .ConfigureAwait(false);
     var y = GenerateInts(n)
       .ToList();
-    Assert.That(x, Is.EqualTo(y));
+    Assert.That(x,
+                Is.EqualTo(y));
   }
 
   [Test]
-  [TestCase(-1,  10000)]
-  [TestCase(0,   100)]
-  [TestCase(1,   10)]
-  [TestCase(2,   20)]
-  [TestCase(10,  100)]
-  [TestCase(100, 1000)]
-  public async Task ParallelSelectLimitShouldWork(int parallelism, int n)
+  [TestCase(-1,
+            0)]
+  [TestCase(-1,
+            1)]
+  [TestCase(-1,
+            4)]
+  [TestCase(-1,
+            1000)]
+  [TestCase(0,
+            0)]
+  [TestCase(0,
+            1)]
+  [TestCase(0,
+            4)]
+  [TestCase(0,
+            100)]
+  [TestCase(1,
+            0)]
+  [TestCase(1,
+            1)]
+  [TestCase(1,
+            4)]
+  [TestCase(1,
+            10)]
+  [TestCase(2,
+            0)]
+  [TestCase(2,
+            1)]
+  [TestCase(2,
+            4)]
+  [TestCase(2,
+            20)]
+  public async Task ParallelSelectAsyncShouldWork(int parallelism,
+                                                  int n)
+  {
+    var x = await GenerateIntsAsync(n,
+                                    10)
+                  .ParallelSelect(new ParallelTaskOptions(parallelism),
+                                  AsyncIdentity(10))
+                  .ToListAsync()
+                  .ConfigureAwait(false);
+    var y = GenerateInts(n)
+      .ToList();
+    Assert.That(x,
+                Is.EqualTo(y));
+  }
+
+  [Test]
+  [TestCase(-1,
+            10000)]
+  [TestCase(0,
+            100)]
+  [TestCase(1,
+            10)]
+  [TestCase(2,
+            20)]
+  [TestCase(10,
+            100)]
+  [TestCase(100,
+            1000)]
+  public async Task ParallelSelectLimitShouldWork(int parallelism,
+                                                  int n)
   {
     var counter    = 0;
     var maxCounter = 0;
@@ -114,36 +160,49 @@ public class ParallelSelectExtTest
     }
 
     var x = await GenerateInts(n)
-                  .ParallelSelect(parallelism, IdentityAsync)
+                  .ParallelSelect(new ParallelTaskOptions(parallelism),
+                                  IdentityAsync)
                   .ToListAsync()
                   .ConfigureAwait(false);
     var y = GenerateInts(n)
       .ToList();
-    Assert.That(x, Is.EqualTo(y));
+    Assert.That(x,
+                Is.EqualTo(y));
 
     if (parallelism > 0)
     {
-      Assert.That(maxCounter, Is.EqualTo(parallelism));
+      Assert.That(maxCounter,
+                  Is.EqualTo(parallelism));
     }
 
     if (parallelism == 0)
     {
-      Assert.That(maxCounter, Is.EqualTo(Environment.ProcessorCount));
+      Assert.That(maxCounter,
+                  Is.EqualTo(Environment.ProcessorCount));
     }
 
     if (parallelism < 0)
     {
-      Assert.That(maxCounter, Is.EqualTo(n));
+      Assert.That(maxCounter,
+                  Is.EqualTo(n));
     }
   }
+
   [Test]
-  [TestCase(-1,  10000)]
-  [TestCase(0,   100)]
-  [TestCase(1,   10)]
-  [TestCase(2,   20)]
-  [TestCase(10,  100)]
-  [TestCase(100, 1000)]
-  public async Task ParallelSelectAsyncLimitShouldWork(int parallelism, int n)
+  [TestCase(-1,
+            10000)]
+  [TestCase(0,
+            100)]
+  [TestCase(1,
+            10)]
+  [TestCase(2,
+            20)]
+  [TestCase(10,
+            100)]
+  [TestCase(100,
+            1000)]
+  public async Task ParallelSelectAsyncLimitShouldWork(int parallelism,
+                                                       int n)
   {
     var counter    = 0;
     var maxCounter = 0;
@@ -166,8 +225,10 @@ public class ParallelSelectExtTest
       return x;
     }
 
-    var x = await GenerateIntsAsync(n, 0)
-                  .ParallelSelect(parallelism, IdentityAsync)
+    var x = await GenerateIntsAsync(n,
+                                    0)
+                  .ParallelSelect(new ParallelTaskOptions(parallelism),
+                                  IdentityAsync)
                   .ToListAsync()
                   .ConfigureAwait(false);
     var y = GenerateInts(n)
@@ -175,20 +236,24 @@ public class ParallelSelectExtTest
 
     if (parallelism > 0)
     {
-      Assert.That(maxCounter, Is.EqualTo(parallelism));
+      Assert.That(maxCounter,
+                  Is.EqualTo(parallelism));
     }
 
     if (parallelism == 0)
     {
-      Assert.That(maxCounter, Is.EqualTo(Environment.ProcessorCount));
+      Assert.That(maxCounter,
+                  Is.EqualTo(Environment.ProcessorCount));
     }
 
     if (parallelism < 0)
     {
-      Assert.That(maxCounter, Is.EqualTo(n));
+      Assert.That(maxCounter,
+                  Is.EqualTo(n));
     }
 
-    Assert.That(x, Is.EqualTo(y));
+    Assert.That(x,
+                Is.EqualTo(y));
   }
 
 
@@ -200,8 +265,8 @@ public class ParallelSelectExtTest
     }
   }
 
-  private static async IAsyncEnumerable<int> GenerateIntsAsync(int                n,
-                                                               int                delay,
+  private static async IAsyncEnumerable<int> GenerateIntsAsync(int                                        n,
+                                                               int                                        delay,
                                                                [EnumeratorCancellation] CancellationToken cancellationToken = default)
   {
     for (var i = 0; i < n; ++i)
