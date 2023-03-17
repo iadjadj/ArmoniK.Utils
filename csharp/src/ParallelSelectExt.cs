@@ -133,11 +133,8 @@ public static class ParallelSelectExt
                                        semAcquire)
                               .ConfigureAwait(false);
 
-        // Cancellation has been requested
-        if (which.IsCanceled)
-        {
-          throw new TaskCanceledException();
-        }
+        // If there is an error or cancellation has been requested, we must throw the exception
+        which.ThrowIfError();
 
         // Semaphore has been acquired so we can enqueue a new task
         if (ReferenceEquals(which,
@@ -217,11 +214,8 @@ public static class ParallelSelectExt
                                      front ?? cancelled,
                                      cancelled);
 
-      // Cancellation has been requested
-      if (which.IsCanceled)
-      {
-        throw new TaskCanceledException();
-      }
+      // If there is an error or cancellation has been requested, we must throw the exception
+      which.ThrowIfError();
 
       // Move has completed ("next iteration")
       if (ReferenceEquals(which,

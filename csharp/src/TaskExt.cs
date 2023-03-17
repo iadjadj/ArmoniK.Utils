@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -129,9 +130,39 @@ public static class TaskExt
   ///   The task will wait for the cancellation token to be cancelled and throw an exception.
   /// </summary>
   /// <param name="cancellationToken">Cancellation Token to convert</param>
-  /// <typeparam name="T">Type of the (unused) result of the task</typeparam>
   /// <returns>Task that will be completed upon cancellation</returns>
   [PublicAPI]
   public static Task AsTask(this CancellationToken cancellationToken)
-    => cancellationToken.AsTask<int>();
+    => Task.Delay(Timeout.Infinite, cancellationToken);
+
+  /// <summary>
+  ///   If the task is in error (either cancelled or faulted),
+  ///   the appropriate will be thrown.
+  ///   Otherwise, nothing happens.
+  /// </summary>
+  /// <param name="task">Task to check status</param>
+  /// <param name="cancellationTokenSource">Token source to signal if there is an error</param>
+  [PublicAPI]
+  public static void ThrowIfError(this Task task, CancellationTokenSource? cancellationTokenSource = null)
+  {
+    switch (task.Status)
+    {
+      case TaskStatus.Canceled:
+      case TaskStatus.Faulted:
+        // Signal the token source
+        cancellationTokenSource?.Cancel();
+        // Wait will not block as task is already complete
+        task.Wait();
+        break;
+      case TaskStatus.RanToCompletion:
+        return;
+      case TaskStatus.Created:
+      case TaskStatus.Running:
+      case TaskStatus.WaitingForActivation:
+      case TaskStatus.WaitingForChildrenToComplete:
+      case TaskStatus.WaitingToRun:
+      default:
+        return;
+    }
+  }
 }
