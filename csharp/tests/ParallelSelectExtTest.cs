@@ -258,7 +258,7 @@ public class ParallelSelectExtTest
   public async Task UnorderedCompletionShouldSucceed()
   {
     var firstDone = false;
-    var x = await GenerateInts(10000)
+    var x = await GenerateInts(1000)
                   .ParallelSelect(new ParallelTaskOptions(2),
                                   async i =>
                                   {
@@ -267,7 +267,7 @@ public class ParallelSelectExtTest
                                       return !firstDone;
                                     }
 
-                                    await Task.Delay(1000)
+                                    await Task.Delay(100)
                                               .ConfigureAwait(false);
                                     firstDone = true;
                                     return true;
@@ -282,19 +282,18 @@ public class ParallelSelectExtTest
   public async Task UnorderedAsyncCompletionShouldSucceed()
   {
     var firstDone = false;
-    var x = await GenerateIntsAsync(20,
-                                    1)
+    var x = await GenerateIntsAsync(1000)
                   .ParallelSelect(new ParallelTaskOptions(2),
                                   async i =>
                                   {
-                                    if (i == 0)
+                                    if (i != 0)
                                     {
-                                      await Task.Delay(1000);
-                                      firstDone = true;
-                                      return true;
+                                      return !firstDone;
                                     }
 
-                                    return !firstDone;
+                                    await Task.Delay(100);
+                                    firstDone = true;
+                                    return true;
                                   })
                   .ToListAsync()
                   .ConfigureAwait(false);
