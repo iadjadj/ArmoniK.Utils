@@ -249,9 +249,10 @@ public class ParallelSelectExtTest
                                               bool cancellationAware,
                                               bool cancelLast)
   {
+    const int cancelAt = 100;
+
     var maxEntered = -1;
     var maxExited  = -1;
-    var cancelAt   = 100;
     var cts        = new CancellationTokenSource();
 
     async Task<int> F(int x)
@@ -316,7 +317,7 @@ public class ParallelSelectExtTest
                                           bool cancellationAware,
                                           bool throwLast)
   {
-    var throwAt = 100;
+    const int throwAt = 100;
 
     async Task<int> F(int x)
     {
