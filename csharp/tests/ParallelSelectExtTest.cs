@@ -250,6 +250,54 @@ public class ParallelSelectExtTest
                 Is.EqualTo(y));
   }
 
+  [Test]
+  public async Task UnorderedCompletionShouldWork()
+  {
+    var firstDone = false;
+    var x = await GenerateInts(10000)
+                  .ParallelSelect(new ParallelTaskOptions(2),
+                                  async i =>
+                                  {
+                                    if (i != 0)
+                                    {
+                                      return !firstDone;
+                                    }
+
+                                    await Task.Delay(1000)
+                                              .ConfigureAwait(false);
+                                    firstDone = true;
+                                    return true;
+                                  })
+                  .ToListAsync()
+                  .ConfigureAwait(false);
+    Assert.That(x,
+                Is.All.True);
+  }
+
+  [Test]
+  public async Task UnorderedAsyncCompletionShouldWork()
+  {
+    var firstDone = false;
+    var x = await GenerateIntsAsync(20,
+                                    1)
+                  .ParallelSelect(new ParallelTaskOptions(2),
+                                  async i =>
+                                  {
+                                    if (i == 0)
+                                    {
+                                      await Task.Delay(1000);
+                                      firstDone = true;
+                                      return true;
+                                    }
+
+                                    return !firstDone;
+                                  })
+                  .ToListAsync()
+                  .ConfigureAwait(false);
+    Assert.That(x,
+                Is.All.True);
+  }
+
 
   private static IEnumerable<int> GenerateInts(int n)
   {
