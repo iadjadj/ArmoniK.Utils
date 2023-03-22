@@ -344,12 +344,19 @@ public class ParallelSelectExtTest
                          .ParallelSelect(new ParallelTaskOptions(-1),
                                          F);
 
-    Assert.ThrowsAsync<ApplicationException>(async () =>
-                                             {
-                                               await foreach (var _ in enumerable.WithCancellation(CancellationToken.None))
-                                               {
-                                               }
-                                             });
+    await using var enumerator = enumerable.GetAsyncEnumerator();
+
+    for (var i = 0; i < throwAt; ++i)
+    {
+      Assert.That(await enumerator.MoveNextAsync()
+                                  .ConfigureAwait(false),
+                  Is.EqualTo(true));
+      Assert.That(enumerator.Current,
+                  Is.EqualTo(i));
+    }
+
+    Assert.ThrowsAsync<ApplicationException>(async () => await enumerator.MoveNextAsync()
+                                                                         .ConfigureAwait(false));
   }
 
   private static IEnumerable<int> GenerateInts(int n)
