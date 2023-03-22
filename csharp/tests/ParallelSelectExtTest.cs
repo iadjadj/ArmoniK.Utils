@@ -301,6 +301,128 @@ public class ParallelSelectExtTest
                 Is.All.True);
   }
 
+  [Test]
+  [TestCase(false,
+            false)]
+  [TestCase(false,
+            true)]
+  [TestCase(true,
+            false)]
+  [TestCase(true,
+            true)]
+  public async Task CancellationShouldSucceed(bool cancellationAware,
+                                              bool cancelLast)
+  {
+    var maxEntered = -1;
+    var maxExited  = -1;
+    var cancelAt   = 100;
+    var cts        = new CancellationTokenSource();
+    Assert.ThrowsAsync<TaskCanceledException>(async () =>
+                                              {
+                                                await foreach (var x in GenerateInts(cancelLast
+                                                                                       ? cancelAt + 1
+                                                                                       : 100000)
+                                                                        .ParallelSelect(new ParallelTaskOptions(-1,
+                                                                                                                cts.Token),
+                                                                                        async x =>
+                                                                                        {
+                                                                                          if (x == cancelAt)
+                                                                                          {
+                                                                                            cts.Cancel();
+                                                                                          }
+
+                                                                                          InterlockedMax(ref maxEntered,
+                                                                                                         x);
+
+                                                                                          await Task.Delay(100,
+                                                                                                           cancellationAware
+                                                                                                             ? cts.Token
+                                                                                                             : CancellationToken.None)
+                                                                                                    .ConfigureAwait(false);
+
+                                                                                          InterlockedMax(ref maxExited,
+                                                                                                         x);
+                                                                                          return x;
+                                                                                        })
+                                                                        .WithCancellation(CancellationToken.None))
+                                                {
+                                                }
+                                              });
+
+    await Task.Delay(200,
+                     CancellationToken.None)
+              .ConfigureAwait(false);
+
+    Assert.That(maxEntered,
+                Is.EqualTo(cancelAt));
+    Assert.That(maxExited,
+                Is.EqualTo(cancellationAware
+                             ? -1
+                             : cancelAt));
+  }
+
+  [Test]
+  [TestCase(false,
+            false)]
+  [TestCase(false,
+            true)]
+  [TestCase(true,
+            false)]
+  [TestCase(true,
+            true)]
+  public async Task CancellationAsyncShouldSucceed(bool cancellationAware,
+                                                   bool cancelLast)
+  {
+    var maxEntered = -1;
+    var maxExited  = -1;
+    var cancelAt   = 100;
+    var cts        = new CancellationTokenSource();
+    Assert.ThrowsAsync<TaskCanceledException>(async () =>
+                                              {
+                                                await foreach (var x in GenerateIntsAsync(cancelLast
+                                                                                            ? cancelAt + 1
+                                                                                            : 100000,
+                                                                                          0,
+                                                                                          CancellationToken.None)
+                                                                        .ParallelSelect(new ParallelTaskOptions(-1,
+                                                                                                                cts.Token),
+                                                                                        async x =>
+                                                                                        {
+                                                                                          if (x == cancelAt)
+                                                                                          {
+                                                                                            cts.Cancel();
+                                                                                          }
+
+                                                                                          InterlockedMax(ref maxEntered,
+                                                                                                         x);
+
+                                                                                          await Task.Delay(100,
+                                                                                                           cancellationAware
+                                                                                                             ? cts.Token
+                                                                                                             : CancellationToken.None)
+                                                                                                    .ConfigureAwait(false);
+
+                                                                                          InterlockedMax(ref maxExited,
+                                                                                                         x);
+                                                                                          return x;
+                                                                                        })
+                                                                        .WithCancellation(CancellationToken.None))
+                                                {
+                                                }
+                                              });
+
+    await Task.Delay(200,
+                     CancellationToken.None)
+              .ConfigureAwait(false);
+
+    Assert.That(maxEntered,
+                Is.EqualTo(cancelAt));
+    Assert.That(maxExited,
+                Is.EqualTo(cancellationAware
+                             ? -1
+                             : cancelAt));
+  }
+
 
   private static IEnumerable<int> GenerateInts(int n)
   {

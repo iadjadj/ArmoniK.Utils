@@ -16,6 +16,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -95,11 +96,10 @@ public static class ParallelSelectExt
     var parallelism       = parallelTaskOptions.ParallelismLimit;
     var cancellationToken = parallelTaskOptions.CancellationToken;
 
-    // cancellation task for early exit
-    var cancelled = cancellationToken.AsTask<T>();
     // Queue of tasks
     var queue = new Queue<Task<T>>();
     // Semaphore to limit the parallelism
+    // Semaphore is created with one resource already acquired
     using var sem = new SemaphoreSlim(parallelism - 1,
                                       parallelism);
 
@@ -128,10 +128,12 @@ public static class ParallelSelectExt
                       ? queue.Peek()
                       : null;
         // Select the first task to be ready
-        var which = await Task.WhenAny(cancelled,
-                                       front ?? cancelled,
-                                       semAcquire)
-                              .ConfigureAwait(false);
+        // There is no need to explicitly wait on cancellation: semAcquire natively supports cancellation
+        var which = front is not null
+                      ? await Task.WhenAny(front,
+                                           semAcquire)
+                                  .ConfigureAwait(false)
+                      : semAcquire;
 
         // If there is an error or cancellation has been requested, we must throw the exception
         which.ThrowIfError();
@@ -144,10 +146,15 @@ public static class ParallelSelectExt
         }
 
         // Front task was ready, so we can get its result and yield it
+        Debug.Assert(ReferenceEquals(which,
+                                     front));
         yield return await queue.Dequeue()
                                 .ConfigureAwait(false);
       }
     }
+
+    // cancellation task for early exit
+    var cancelled = cancellationToken.AsTask<T>();
 
     // We finished iterating over the inputs and
     // must now wait for all the tasks in the queue
@@ -155,8 +162,8 @@ public static class ParallelSelectExt
     {
       // Dequeue a new task and wait for its result
       // Early exit if cancellation is requested
-      yield return await Task.WhenAny(task,
-                                      cancelled)
+      yield return await Task.WhenAny(cancelled,
+                                      task)
                              .Unwrap()
                              .ConfigureAwait(false);
     }
@@ -179,11 +186,10 @@ public static class ParallelSelectExt
     var parallelism       = parallelTaskOptions.ParallelismLimit;
     var cancellationToken = parallelTaskOptions.CancellationToken;
 
-    // cancellation tasks for early exit
-    var cancelled = cancellationToken.AsTask<T>();
     // Queue of tasks
     var queue = new Queue<Task<T>>();
     // Semaphore to limit the parallelism
+    // Semaphore is created with one resource already acquired
     using var sem = new SemaphoreSlim(parallelism - 1,
                                       parallelism);
 
@@ -210,42 +216,17 @@ public static class ParallelSelectExt
                     ? queue.Peek()
                     : null;
       // Select the first task to be ready
-      var which = await Task.WhenAny(next,
-                                     front ?? cancelled,
-                                     cancelled);
+      // There is no need to explicitly wait on cancellation:
+      //   next can be semAcquire which natively supports cancellation
+      //   next can also be the moveNext which is ran in a Task.run with a cancellationToken
+      var which = front is not null
+                    ? await Task.WhenAny(front,
+                                         next)
+                                .ConfigureAwait(false)
+                    : next;
 
       // If there is an error or cancellation has been requested, we must throw the exception
       which.ThrowIfError();
-
-      // Move has completed ("next iteration")
-      if (ReferenceEquals(which,
-                          move))
-      {
-        // Iteration has reached an end
-        if (!await move.ConfigureAwait(false))
-        {
-          break;
-        }
-
-        // Current task is now ready,
-        // so now we can enqueue it as soon as the semaphore is acquired
-        var x = enumerator.Current;
-
-        // Async closure that waits for the task x and releases the semaphore
-        async Task<T> TaskLambda()
-        {
-          var res = await x.ConfigureAwait(false);
-          sem.Release();
-          return res;
-        }
-
-        // We can enqueue the task
-        queue.Enqueue(Task.Run(TaskLambda,
-                               cancellationToken));
-
-        next = semAcquire;
-        continue;
-      }
 
       // semaphore has been acquired so we can enqueue a new task
       if (ReferenceEquals(which,
@@ -269,8 +250,37 @@ public static class ParallelSelectExt
         continue;
       }
 
-      throw new InvalidOperationException("Should never arrive there");
+      // Move has completed ("next iteration")
+      Debug.Assert(ReferenceEquals(which,
+                                   move));
+
+      // Iteration has reached an end
+      if (!await move.ConfigureAwait(false))
+      {
+        break;
+      }
+
+      // Current task is now ready,
+      // so now we can enqueue it as soon as the semaphore is acquired
+      var x = enumerator.Current;
+
+      // Async closure that waits for the task x and releases the semaphore
+      async Task<T> TaskLambda()
+      {
+        var res = await x.ConfigureAwait(false);
+        sem.Release();
+        return res;
+      }
+
+      // We can enqueue the task
+      queue.Enqueue(Task.Run(TaskLambda,
+                             cancellationToken));
+
+      next = semAcquire;
     }
+
+    // cancellation tasks for early exit
+    var cancelled = cancellationToken.AsTask<T>();
 
     // We finished iterating over the inputs and
     // must now wait for all the tasks in the queue

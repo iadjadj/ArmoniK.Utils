@@ -14,7 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -133,7 +132,8 @@ public static class TaskExt
   /// <returns>Task that will be completed upon cancellation</returns>
   [PublicAPI]
   public static Task AsTask(this CancellationToken cancellationToken)
-    => Task.Delay(Timeout.Infinite, cancellationToken);
+    => Task.Delay(Timeout.Infinite,
+                  cancellationToken);
 
   /// <summary>
   ///   If the task is in error (either cancelled or faulted),
@@ -143,16 +143,21 @@ public static class TaskExt
   /// <param name="task">Task to check status</param>
   /// <param name="cancellationTokenSource">Token source to signal if there is an error</param>
   [PublicAPI]
-  public static void ThrowIfError(this Task task, CancellationTokenSource? cancellationTokenSource = null)
+  public static void ThrowIfError(this Task                task,
+                                  CancellationTokenSource? cancellationTokenSource = null)
   {
     switch (task.Status)
     {
       case TaskStatus.Canceled:
       case TaskStatus.Faulted:
-        // Signal the token source
+        // Signal the token source, if any
         cancellationTokenSource?.Cancel();
-        // Wait will not block as task is already complete
-        task.Wait();
+
+        // Task is already completed, .GetAwaiter().GetResult() will not block
+        // .GetResult() will throw the exception that we want and not an AggregateException like .Wait() or .Result would
+        task.GetAwaiter()
+            .GetResult();
+
         break;
       case TaskStatus.RanToCompletion:
         return;
