@@ -97,7 +97,7 @@ public static class ParallelSelectExt
     var cancellationToken = parallelTaskOptions.CancellationToken;
 
     // CancellationTokenSource used to cancel all tasks inflight upon errors
-    var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+    using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
     // Queue of tasks
     var queue = new Queue<Task<T>>();
@@ -132,14 +132,12 @@ public static class ParallelSelectExt
                       : null;
         // Select the first task to be ready
         // There is no need to explicitly wait on cancellation: semAcquire natively supports cancellation
-        var which = front is not null
-                      ? await Task.WhenAny(front,
-                                           semAcquire)
-                                  .ConfigureAwait(false)
-                      : semAcquire;
+        using var which = await Task.WhenAny(front ?? semAcquire,
+                                             semAcquire)
+                                    .ConfigureAwait(false);
 
         // If there is an error or cancellation has been requested, we must throw the exception
-        which.ThrowIfError(cts);
+        which.ThrowIfError();
 
         // Semaphore has been acquired so we can enqueue a new task
         if (ReferenceEquals(which,
@@ -163,7 +161,10 @@ public static class ParallelSelectExt
       // Dequeue a new task and wait for its result
       // As the task is wrapped in a Task.run with the cancellation token,
       // It will be cancelled as soon cancellation is triggered
-      yield return await task.ConfigureAwait(false);
+      using (task)
+      {
+        yield return await task.ConfigureAwait(false);
+      }
     }
   }
 
@@ -185,7 +186,7 @@ public static class ParallelSelectExt
     var cancellationToken = parallelTaskOptions.CancellationToken;
 
     // CancellationTokenSource used to cancel all tasks inflight upon errors
-    var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+    using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
     // Queue of tasks
     var queue = new Queue<Task<T>>();
@@ -220,11 +221,9 @@ public static class ParallelSelectExt
       // There is no need to explicitly wait on cancellation:
       //   next can be semAcquire which natively supports cancellation
       //   next can also be the moveNext which is ran in a Task.run with a cancellationToken
-      var which = front is not null
-                    ? await Task.WhenAny(front,
-                                         next)
-                                .ConfigureAwait(false)
-                    : next;
+      using var which = await Task.WhenAny(front ?? next,
+                                           next)
+                                  .ConfigureAwait(false);
 
       // If there is an error or cancellation has been requested, we must throw the exception
       which.ThrowIfError(cts);
@@ -287,7 +286,10 @@ public static class ParallelSelectExt
       // Dequeue a new task and wait for its result
       // As the task is wrapped in a Task.run with the cancellation token,
       // It will be cancelled as soon cancellation is triggered
-      yield return await task.ConfigureAwait(false);
+      using (task)
+      {
+        yield return await task.ConfigureAwait(false);
+      }
     }
   }
 
