@@ -110,8 +110,7 @@ public class ParallelSelectExtTest
   public async Task ParallelSelectAsyncShouldWork(int parallelism,
                                                   int n)
   {
-    var x = await GenerateIntsAsync(n,
-                                    10)
+    var x = await GenerateIntsAsync(n)
                   .ParallelSelect(new ParallelTaskOptions(parallelism),
                                   AsyncIdentity(10))
                   .ToListAsync()
@@ -140,13 +139,13 @@ public class ParallelSelectExtTest
   {
     var counter    = 0;
     var maxCounter = 0;
-    var delay      = 1000;
+    var delay      = 100;
 
     async Task<int> IdentityAsync(int x)
     {
       var count = Interlocked.Increment(ref counter);
       var max   = maxCounter;
-      while (count > maxCounter)
+      while (count > max)
       {
         max = Interlocked.CompareExchange(ref maxCounter,
                                           count,
@@ -169,22 +168,20 @@ public class ParallelSelectExtTest
     Assert.That(x,
                 Is.EqualTo(y));
 
-    if (parallelism > 0)
+    switch (parallelism)
     {
-      Assert.That(maxCounter,
-                  Is.EqualTo(parallelism));
-    }
-
-    if (parallelism == 0)
-    {
-      Assert.That(maxCounter,
-                  Is.EqualTo(Environment.ProcessorCount));
-    }
-
-    if (parallelism < 0)
-    {
-      Assert.That(maxCounter,
-                  Is.EqualTo(n));
+      case > 0:
+        Assert.That(maxCounter,
+                    Is.EqualTo(parallelism));
+        break;
+      case 0:
+        Assert.That(maxCounter,
+                    Is.EqualTo(Environment.ProcessorCount));
+        break;
+      case < 0:
+        Assert.That(maxCounter,
+                    Is.EqualTo(n));
+        break;
     }
   }
 
@@ -206,7 +203,7 @@ public class ParallelSelectExtTest
   {
     var counter    = 0;
     var maxCounter = 0;
-    var delay      = 1000;
+    var delay      = 100;
 
     async Task<int> IdentityAsync(int x)
     {
@@ -225,8 +222,7 @@ public class ParallelSelectExtTest
       return x;
     }
 
-    var x = await GenerateIntsAsync(n,
-                                    0)
+    var x = await GenerateIntsAsync(n)
                   .ParallelSelect(new ParallelTaskOptions(parallelism),
                                   IdentityAsync)
                   .ToListAsync()
@@ -234,22 +230,20 @@ public class ParallelSelectExtTest
     var y = GenerateInts(n)
       .ToList();
 
-    if (parallelism > 0)
+    switch (parallelism)
     {
-      Assert.That(maxCounter,
-                  Is.EqualTo(parallelism));
-    }
-
-    if (parallelism == 0)
-    {
-      Assert.That(maxCounter,
-                  Is.EqualTo(Environment.ProcessorCount));
-    }
-
-    if (parallelism < 0)
-    {
-      Assert.That(maxCounter,
-                  Is.EqualTo(n));
+      case > 0:
+        Assert.That(maxCounter,
+                    Is.EqualTo(parallelism));
+        break;
+      case 0:
+        Assert.That(maxCounter,
+                    Is.EqualTo(Environment.ProcessorCount));
+        break;
+      case < 0:
+        Assert.That(maxCounter,
+                    Is.EqualTo(n));
+        break;
     }
 
     Assert.That(x,
@@ -266,7 +260,7 @@ public class ParallelSelectExtTest
   }
 
   private static async IAsyncEnumerable<int> GenerateIntsAsync(int                                        n,
-                                                               int                                        delay,
+                                                               int                                        delay             = 0,
                                                                [EnumeratorCancellation] CancellationToken cancellationToken = default)
   {
     for (var i = 0; i < n; ++i)
@@ -277,6 +271,10 @@ public class ParallelSelectExtTest
                          cancellationToken)
                   .ConfigureAwait(false);
       }
+      else
+      {
+        await Task.Yield();
+      }
 
       yield return i;
     }
@@ -286,11 +284,15 @@ public class ParallelSelectExtTest
                                                     CancellationToken cancellationToken = default)
     => async x =>
        {
-         /*if (delay > 0)*/
+         if (delay > 0)
          {
            await Task.Delay(delay,
                             cancellationToken)
                      .ConfigureAwait(false);
+         }
+         else
+         {
+           await Task.Yield();
          }
 
          return x;
