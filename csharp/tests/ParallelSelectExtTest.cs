@@ -310,6 +310,48 @@ public class ParallelSelectExtTest
                              : cancelAt));
   }
 
+  [Test]
+  [TestCaseSource(nameof(CancellationCases))]
+  public async Task ThrowingShouldSucceed(bool useAsync,
+                                          bool cancellationAware,
+                                          bool throwLast)
+  {
+    var throwAt = 100;
+
+    async Task<int> F(int x)
+    {
+      if (x == throwAt)
+      {
+        throw new ApplicationException();
+      }
+
+      await Task.Delay(100)
+                .ConfigureAwait(false);
+      return x;
+    }
+
+    var enumerable = useAsync
+                       ? GenerateInts(throwLast
+                                        ? throwAt + 1
+                                        : 100000)
+                         .ParallelSelect(new ParallelTaskOptions(-1),
+                                         F)
+                       : GenerateIntsAsync(throwLast
+                                             ? throwAt + 1
+                                             : 100000,
+                                           0,
+                                           CancellationToken.None)
+                         .ParallelSelect(new ParallelTaskOptions(-1),
+                                         F);
+
+    Assert.ThrowsAsync<ApplicationException>(async () =>
+                                             {
+                                               await foreach (var _ in enumerable.WithCancellation(CancellationToken.None))
+                                               {
+                                               }
+                                             });
+  }
+
   private static IEnumerable<int> GenerateInts(int n)
   {
     for (var i = 0; i < n; ++i)

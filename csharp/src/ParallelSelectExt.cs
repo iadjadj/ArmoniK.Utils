@@ -96,6 +96,9 @@ public static class ParallelSelectExt
     var parallelism       = parallelTaskOptions.ParallelismLimit;
     var cancellationToken = parallelTaskOptions.CancellationToken;
 
+    // CancellationTokenSource used to cancel all tasks inflight upon errors
+    var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
     // Queue of tasks
     var queue = new Queue<Task<T>>();
     // Semaphore to limit the parallelism
@@ -107,7 +110,7 @@ public static class ParallelSelectExt
     foreach (var x in enumerable)
     {
       // Prepare the new semaphore acquisition
-      var semAcquire = sem.WaitAsync(cancellationToken);
+      var semAcquire = sem.WaitAsync(cts.Token);
 
       // Async closure that waits for the task x and releases the semaphore
       async Task<T> TaskLambda()
@@ -119,7 +122,7 @@ public static class ParallelSelectExt
 
       // We can enqueue the task
       queue.Enqueue(Task.Run(TaskLambda,
-                             cancellationToken));
+                             cts.Token));
 
       // Dequeue tasks as long as the semaphore is not acquired yet
       while (true)
@@ -136,7 +139,7 @@ public static class ParallelSelectExt
                       : semAcquire;
 
         // If there is an error or cancellation has been requested, we must throw the exception
-        which.ThrowIfError();
+        which.ThrowIfError(cts);
 
         // Semaphore has been acquired so we can enqueue a new task
         if (ReferenceEquals(which,
@@ -153,19 +156,14 @@ public static class ParallelSelectExt
       }
     }
 
-    // cancellation task for early exit
-    var cancelled = cancellationToken.AsTask<T>();
-
     // We finished iterating over the inputs and
     // must now wait for all the tasks in the queue
     foreach (var task in queue)
     {
       // Dequeue a new task and wait for its result
-      // Early exit if cancellation is requested
-      yield return await Task.WhenAny(cancelled,
-                                      task)
-                             .Unwrap()
-                             .ConfigureAwait(false);
+      // As the task is wrapped in a Task.run with the cancellation token,
+      // It will be cancelled as soon cancellation is triggered
+      yield return await task.ConfigureAwait(false);
     }
   }
 
@@ -186,6 +184,9 @@ public static class ParallelSelectExt
     var parallelism       = parallelTaskOptions.ParallelismLimit;
     var cancellationToken = parallelTaskOptions.CancellationToken;
 
+    // CancellationTokenSource used to cancel all tasks inflight upon errors
+    var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
     // Queue of tasks
     var queue = new Queue<Task<T>>();
     // Semaphore to limit the parallelism
@@ -194,10 +195,10 @@ public static class ParallelSelectExt
                                       parallelism);
 
     // Prepare acquire of the semaphore
-    var semAcquire = sem.WaitAsync(cancellationToken);
+    var semAcquire = sem.WaitAsync(cts.Token);
 
     // Manual enumeration allow for overlapping gets and yields
-    await using var enumerator = enumerable.GetAsyncEnumerator(cancellationToken);
+    await using var enumerator = enumerable.GetAsyncEnumerator(cts.Token);
 
     Task<bool> MoveNext()
       => enumerator.MoveNextAsync()
@@ -205,7 +206,7 @@ public static class ParallelSelectExt
 
     // Start first move
     var move = Task.Run(MoveNext,
-                        cancellationToken);
+                        cts.Token);
 
     // what to do next: either semAcquire or move
     Task next = move;
@@ -226,7 +227,7 @@ public static class ParallelSelectExt
                     : next;
 
       // If there is an error or cancellation has been requested, we must throw the exception
-      which.ThrowIfError();
+      which.ThrowIfError(cts);
 
       // semaphore has been acquired so we can enqueue a new task
       if (ReferenceEquals(which,
@@ -279,19 +280,14 @@ public static class ParallelSelectExt
       next = semAcquire;
     }
 
-    // cancellation tasks for early exit
-    var cancelled = cancellationToken.AsTask<T>();
-
     // We finished iterating over the inputs and
     // must now wait for all the tasks in the queue
     foreach (var task in queue)
     {
       // Dequeue a new task and wait for its result
-      // Early exit if cancellation is requested
-      yield return await Task.WhenAny(task,
-                                      cancelled)
-                             .Unwrap()
-                             .ConfigureAwait(false);
+      // As the task is wrapped in a Task.run with the cancellation token,
+      // It will be cancelled as soon cancellation is triggered
+      yield return await task.ConfigureAwait(false);
     }
   }
 
