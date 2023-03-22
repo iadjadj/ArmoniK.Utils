@@ -60,8 +60,8 @@ public class ParallelSelectExtTest
             4)]
   [TestCase(2,
             20)]
-  public async Task ParallelSelectShouldWork(int parallelism,
-                                             int n)
+  public async Task ParallelSelectShouldSucceed(int parallelism,
+                                                int n)
   {
     var x = await GenerateInts(n)
                   .ParallelSelect(new ParallelTaskOptions(parallelism),
@@ -108,8 +108,8 @@ public class ParallelSelectExtTest
             4)]
   [TestCase(2,
             20)]
-  public async Task ParallelSelectAsyncShouldWork(int parallelism,
-                                                  int n)
+  public async Task ParallelSelectAsyncShouldSucceed(int parallelism,
+                                                     int n)
   {
     var x = await GenerateIntsAsync(n)
                   .ParallelSelect(new ParallelTaskOptions(parallelism),
@@ -136,8 +136,8 @@ public class ParallelSelectExtTest
             100)]
   [TestCase(100,
             1000)]
-  public async Task ParallelSelectLimitShouldWork(int parallelism,
-                                                  int n)
+  public async Task ParallelSelectLimitShouldSucceed(int parallelism,
+                                                     int n)
   {
     var counter    = 0;
     var maxCounter = 0;
@@ -201,8 +201,8 @@ public class ParallelSelectExtTest
             100)]
   [TestCase(100,
             1000)]
-  public async Task ParallelSelectAsyncLimitShouldWork(int parallelism,
-                                                       int n)
+  public async Task ParallelSelectAsyncLimitShouldSucceed(int parallelism,
+                                                          int n)
   {
     var counter    = 0;
     var maxCounter = 0;
@@ -255,7 +255,7 @@ public class ParallelSelectExtTest
   }
 
   [Test]
-  public async Task UnorderedCompletionShouldWork()
+  public async Task UnorderedCompletionShouldSucceed()
   {
     var firstDone = false;
     var x = await GenerateInts(10000)
@@ -279,7 +279,7 @@ public class ParallelSelectExtTest
   }
 
   [Test]
-  public async Task UnorderedAsyncCompletionShouldWork()
+  public async Task UnorderedAsyncCompletionShouldSucceed()
   {
     var firstDone = false;
     var x = await GenerateIntsAsync(20,
