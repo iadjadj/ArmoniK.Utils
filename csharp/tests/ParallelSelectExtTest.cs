@@ -65,7 +65,8 @@ public class ParallelSelectExtTest
   {
     var x = await GenerateInts(n)
                   .ParallelSelect(new ParallelTaskOptions(parallelism),
-                                  AsyncIdentity(10))
+                                  AsyncIdentity(0,
+                                                10))
                   .ToListAsync()
                   .ConfigureAwait(false);
     var y = GenerateInts(n)
@@ -112,7 +113,8 @@ public class ParallelSelectExtTest
   {
     var x = await GenerateIntsAsync(n)
                   .ParallelSelect(new ParallelTaskOptions(parallelism),
-                                  AsyncIdentity(10))
+                                  AsyncIdentity(0,
+                                                10))
                   .ToListAsync()
                   .ConfigureAwait(false);
     var y = GenerateInts(n)
@@ -139,23 +141,29 @@ public class ParallelSelectExtTest
   {
     var counter    = 0;
     var maxCounter = 0;
-    var delay      = 100;
 
-    async Task<int> IdentityAsync(int x)
+    // We use a larger wait for infinite parallelism to ensure we can actually spawn thousands of tasks in parallel
+    var identity = parallelism < 0
+                     ? AsyncIdentity(200,
+                                     400)
+                     : AsyncIdentity(50,
+                                     100);
+
+    async Task<int> F(int x)
     {
       var count = Interlocked.Increment(ref counter);
       InterlockedMax(ref maxCounter,
                      count);
 
-      await Task.Delay(delay)
-                .ConfigureAwait(false);
+      await identity(x)
+        .ConfigureAwait(false);
       Interlocked.Decrement(ref counter);
       return x;
     }
 
     var x = await GenerateInts(n)
                   .ParallelSelect(new ParallelTaskOptions(parallelism),
-                                  IdentityAsync)
+                                  F)
                   .ToListAsync()
                   .ConfigureAwait(false);
     var y = GenerateInts(n)
@@ -198,23 +206,29 @@ public class ParallelSelectExtTest
   {
     var counter    = 0;
     var maxCounter = 0;
-    var delay      = 100;
 
-    async Task<int> IdentityAsync(int x)
+    // We use a larger wait for infinite parallelism to ensure we can actually spawn thousands of tasks in parallel
+    var identity = parallelism < 0
+                     ? AsyncIdentity(200,
+                                     400)
+                     : AsyncIdentity(50,
+                                     100);
+
+    async Task<int> F(int x)
     {
       var count = Interlocked.Increment(ref counter);
       InterlockedMax(ref maxCounter,
                      count);
 
-      await Task.Delay(delay)
-                .ConfigureAwait(false);
+      await identity(x)
+        .ConfigureAwait(false);
       Interlocked.Decrement(ref counter);
       return x;
     }
 
     var x = await GenerateIntsAsync(n)
                   .ParallelSelect(new ParallelTaskOptions(parallelism),
-                                  IdentityAsync)
+                                  F)
                   .ToListAsync()
                   .ConfigureAwait(false);
     var y = GenerateInts(n)
@@ -318,10 +332,19 @@ public class ParallelSelectExtTest
     }
   }
 
-  private static Func<int, Task<int>> AsyncIdentity(int               delay,
+  private static Func<int, Task<int>> AsyncIdentity(int               delayMin          = 0,
+                                                    int               delayMax          = 0,
                                                     CancellationToken cancellationToken = default)
     => async x =>
        {
+         if (delayMax <= delayMin)
+         {
+           delayMax = delayMin + 1;
+         }
+
+         var rng = new Random(x);
+         var delay = rng.Next(delayMin,
+                              delayMax);
          if (delay > 0)
          {
            await Task.Delay(delay,
@@ -336,8 +359,8 @@ public class ParallelSelectExtTest
          return x;
        };
 
-  private static int InterlockedMax(ref int location,
-                                    int     value)
+  private static void InterlockedMax(ref int location,
+                                     int     value)
   {
     // This is a typical instance of the CAS loop pattern:
     // https://learn.microsoft.com/en-us/dotnet/api/system.threading.interlocked.compareexchange#system-threading-interlocked-compareexchange(system-single@-system-single-system-single)
@@ -353,7 +376,5 @@ public class ParallelSelectExtTest
                                         value,
                                         max);
     }
-
-    return max;
   }
 }
