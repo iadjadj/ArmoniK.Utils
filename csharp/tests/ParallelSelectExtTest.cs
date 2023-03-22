@@ -144,13 +144,8 @@ public class ParallelSelectExtTest
     async Task<int> IdentityAsync(int x)
     {
       var count = Interlocked.Increment(ref counter);
-      var max   = maxCounter;
-      while (count > max)
-      {
-        max = Interlocked.CompareExchange(ref maxCounter,
-                                          count,
-                                          max);
-      }
+      InterlockedMax(ref maxCounter,
+                     count);
 
       await Task.Delay(delay)
                 .ConfigureAwait(false);
@@ -208,13 +203,8 @@ public class ParallelSelectExtTest
     async Task<int> IdentityAsync(int x)
     {
       var count = Interlocked.Increment(ref counter);
-      var max   = maxCounter;
-      while (count > maxCounter)
-      {
-        max = Interlocked.CompareExchange(ref maxCounter,
-                                          count,
-                                          max);
-      }
+      InterlockedMax(ref maxCounter,
+                     count);
 
       await Task.Delay(delay)
                 .ConfigureAwait(false);
@@ -345,4 +335,25 @@ public class ParallelSelectExtTest
 
          return x;
        };
+
+  private static int InterlockedMax(ref int location,
+                                    int     value)
+  {
+    // This is a typical instance of the CAS loop pattern:
+    // https://learn.microsoft.com/en-us/dotnet/api/system.threading.interlocked.compareexchange#system-threading-interlocked-compareexchange(system-single@-system-single-system-single)
+
+    // Red the current max at location
+    var max = location;
+
+    // repeat as long as current max in less than new value
+    while (max < value)
+    {
+      // Tries to store the new value if max has not changed
+      max = Interlocked.CompareExchange(ref location,
+                                        value,
+                                        max);
+    }
+
+    return max;
+  }
 }
