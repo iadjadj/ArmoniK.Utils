@@ -301,13 +301,13 @@ public static class ParallelSelectExt
   /// <param name="enumerable">Enumerable to iterate on</param>
   /// <param name="parallelTaskOptions">Options (eg: parallelismLimit, cancellationToken)</param>
   /// <param name="func">Function to spawn on the enumerable input</param>
-  /// <typeparam name="TU">Type of the inputs</typeparam>
-  /// <typeparam name="TV">Type of the outputs</typeparam>
+  /// <typeparam name="TInput">Type of the inputs</typeparam>
+  /// <typeparam name="TOutput">Type of the outputs</typeparam>
   /// <returns>Asynchronous results of func over the inputs</returns>
   [PublicAPI]
-  public static IAsyncEnumerable<TV> ParallelSelect<TU, TV>(this IEnumerable<TU> enumerable,
-                                                            ParallelTaskOptions  parallelTaskOptions,
-                                                            Func<TU, Task<TV>>   func)
+  public static IAsyncEnumerable<TOutput> ParallelSelect<TInput, TOutput>(this IEnumerable<TInput>    enumerable,
+                                                                          ParallelTaskOptions         parallelTaskOptions,
+                                                                          Func<TInput, Task<TOutput>> func)
     => ParallelWait(enumerable.Select(func),
                     parallelTaskOptions);
 
@@ -319,13 +319,13 @@ public static class ParallelSelectExt
   /// <param name="enumerable">Enumerable to iterate on</param>
   /// <param name="parallelTaskOptions">Options (eg: parallelismLimit, cancellationToken)</param>
   /// <param name="func">Function to spawn on the enumerable input</param>
-  /// <typeparam name="TU">Type of the inputs</typeparam>
-  /// <typeparam name="TV">Type of the outputs</typeparam>
+  /// <typeparam name="TInput">Type of the inputs</typeparam>
+  /// <typeparam name="TOutput">Type of the outputs</typeparam>
   /// <returns>Asynchronous results of func over the inputs</returns>
   [PublicAPI]
-  public static IAsyncEnumerable<TV> ParallelSelect<TU, TV>(this IAsyncEnumerable<TU> enumerable,
-                                                            ParallelTaskOptions       parallelTaskOptions,
-                                                            Func<TU, Task<TV>>        func)
+  public static IAsyncEnumerable<TOutput> ParallelSelect<TInput, TOutput>(this IAsyncEnumerable<TInput> enumerable,
+                                                                          ParallelTaskOptions           parallelTaskOptions,
+                                                                          Func<TInput, Task<TOutput>>   func)
     => ParallelWait(enumerable.Select(func),
                     parallelTaskOptions);
 
@@ -336,12 +336,12 @@ public static class ParallelSelectExt
   /// </summary>
   /// <param name="enumerable">Enumerable to iterate on</param>
   /// <param name="func">Function to spawn on the enumerable input</param>
-  /// <typeparam name="TU">Type of the inputs</typeparam>
-  /// <typeparam name="TV">Type of the outputs</typeparam>
+  /// <typeparam name="TInput">Type of the inputs</typeparam>
+  /// <typeparam name="TOutput">Type of the outputs</typeparam>
   /// <returns>Asynchronous results of func over the inputs</returns>
   [PublicAPI]
-  public static IAsyncEnumerable<TV> ParallelSelect<TU, TV>(this IEnumerable<TU> enumerable,
-                                                            Func<TU, Task<TV>>   func)
+  public static IAsyncEnumerable<TOutput> ParallelSelect<TInput, TOutput>(this IEnumerable<TInput>    enumerable,
+                                                                          Func<TInput, Task<TOutput>> func)
     => ParallelWait(enumerable.Select(func));
 
   /// <summary>
@@ -351,11 +351,11 @@ public static class ParallelSelectExt
   /// </summary>
   /// <param name="enumerable">Enumerable to iterate on</param>
   /// <param name="func">Function to spawn on the enumerable input</param>
-  /// <typeparam name="TU">Type of the inputs</typeparam>
-  /// <typeparam name="TV">Type of the outputs</typeparam>
+  /// <typeparam name="TInput">Type of the inputs</typeparam>
+  /// <typeparam name="TOutput">Type of the outputs</typeparam>
   /// <returns>Asynchronous results of func over the inputs</returns>
   [PublicAPI]
-  public static IAsyncEnumerable<TV> ParallelSelect<TU, TV>(this IAsyncEnumerable<TU> enumerable,
-                                                            Func<TU, Task<TV>>        func)
+  public static IAsyncEnumerable<TOutput> ParallelSelect<TInput, TOutput>(this IAsyncEnumerable<TInput> enumerable,
+                                                                          Func<TInput, Task<TOutput>>   func)
     => ParallelWait(enumerable.Select(func));
 }
