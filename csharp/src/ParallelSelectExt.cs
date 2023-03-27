@@ -31,11 +31,23 @@ namespace ArmoniK.Utils;
 [PublicAPI]
 public struct ParallelTaskOptions
 {
+  private readonly int parallelismLimit_ = 0;
+
   /// <summary>Limit the parallelism for ParallelSelect and ParallelWait</summary>
-  public int ParallelismLimit { get; }
+  public int ParallelismLimit
+  {
+    get
+      => parallelismLimit_ switch
+         {
+           < 0 => int.MaxValue,
+           0   => Environment.ProcessorCount,
+           _   => parallelismLimit_,
+         };
+    init => parallelismLimit_ = value;
+  }
 
   /// <summary>Cancellation token used for stopping the enumeration</summary>
-  public CancellationToken CancellationToken { get; }
+  public CancellationToken CancellationToken { get; init; } = default;
 
   /// <summary>
   ///   Options for ParallelSelect and ParallelWait.
@@ -47,12 +59,7 @@ public struct ParallelTaskOptions
   public ParallelTaskOptions(int               parallelismLimit,
                              CancellationToken cancellationToken = default)
   {
-    ParallelismLimit = parallelismLimit switch
-                       {
-                         < 0 => int.MaxValue,
-                         0   => Environment.ProcessorCount,
-                         _   => parallelismLimit,
-                       };
+    ParallelismLimit  = parallelismLimit;
     CancellationToken = cancellationToken;
   }
 
