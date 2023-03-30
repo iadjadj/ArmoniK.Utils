@@ -16,6 +16,7 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 using JetBrains.Annotations;
@@ -107,4 +108,66 @@ public static class TaskExt
   [PublicAPI]
   public static async Task<List<T>> ToListAsync<T>(this Task<IEnumerable<T>> enumerableTask)
     => (await enumerableTask.ConfigureAwait(false)).ToList();
+
+  /// <summary>
+  ///   Convert a Cancellation Token into a Task.
+  ///   The task will wait for the cancellation token to be cancelled and throw an exception.
+  /// </summary>
+  /// <param name="cancellationToken">Cancellation Token to convert</param>
+  /// <typeparam name="T">Type of the (unused) result of the task</typeparam>
+  /// <returns>Task that will be completed upon cancellation</returns>
+  [PublicAPI]
+  public static Task<T> AsTask<T>(this CancellationToken cancellationToken)
+  {
+    var tcs = new TaskCompletionSource<T>();
+    cancellationToken.Register(() => tcs.SetCanceled());
+    return tcs.Task;
+  }
+
+  /// <summary>
+  ///   Convert a Cancellation Token into a Task.
+  ///   The task will wait for the cancellation token to be cancelled and throw an exception.
+  /// </summary>
+  /// <param name="cancellationToken">Cancellation Token to convert</param>
+  /// <returns>Task that will be completed upon cancellation</returns>
+  [PublicAPI]
+  public static Task AsTask(this CancellationToken cancellationToken)
+    => Task.Delay(Timeout.Infinite,
+                  cancellationToken);
+
+  /// <summary>
+  ///   If the task is in error (either cancelled or faulted),
+  ///   the appropriate will be thrown.
+  ///   Otherwise, nothing happens.
+  /// </summary>
+  /// <param name="task">Task to check status</param>
+  /// <param name="cancellationTokenSource">Token source to signal if there is an error</param>
+  [PublicAPI]
+  public static void ThrowIfError(this Task                task,
+                                  CancellationTokenSource? cancellationTokenSource = null)
+  {
+    switch (task.Status)
+    {
+      case TaskStatus.Canceled:
+      case TaskStatus.Faulted:
+        // Signal the token source, if any
+        cancellationTokenSource?.Cancel();
+
+        // Task is already completed, .GetAwaiter().GetResult() will not block
+        // .GetResult() will throw the exception that we want and not an AggregateException like .Wait() or .Result would
+        task.GetAwaiter()
+            .GetResult();
+
+        break;
+      case TaskStatus.RanToCompletion:
+        return;
+      case TaskStatus.Created:
+      case TaskStatus.Running:
+      case TaskStatus.WaitingForActivation:
+      case TaskStatus.WaitingForChildrenToComplete:
+      case TaskStatus.WaitingToRun:
+      default:
+        return;
+    }
+  }
 }
