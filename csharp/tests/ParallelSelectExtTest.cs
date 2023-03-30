@@ -420,16 +420,16 @@ public class ParallelSelectExtTest
 
              (true, false, null) => GenerateInts(n)
                                     .Select(f)
-                                    .ParallelWait(),
+                                    .LowLevelParallelWait(),
              (true, false, ParallelTaskOptions opt) => GenerateInts(n)
                                                        .Select(f)
-                                                       .ParallelWait(opt),
+                                                       .LowLevelParallelWait(opt),
              (true, true, null) => GenerateIntsAsync(n)
                                    .Select(f)
-                                   .ParallelWait(),
+                                   .LowLevelParallelWait(),
              (true, true, ParallelTaskOptions opt) => GenerateIntsAsync(n)
                                                       .Select(f)
-                                                      .ParallelWait(opt),
+                                                      .LowLevelParallelWait(opt),
            };
   }
 

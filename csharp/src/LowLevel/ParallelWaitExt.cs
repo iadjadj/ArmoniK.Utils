@@ -36,8 +36,8 @@ public static class ParallelWaitExt
   /// <typeparam name="T">Return type of the tasks</typeparam>
   /// <returns>Asynchronous results of tasks</returns>
   [PublicAPI]
-  public static async IAsyncEnumerable<T> ParallelWait<T>(this IEnumerable<Task<T>> enumerable,
-                                                          ParallelTaskOptions       parallelTaskOptions = default)
+  public static async IAsyncEnumerable<T> LowLevelParallelWait<T>(this IEnumerable<Task<T>> enumerable,
+                                                                  ParallelTaskOptions       parallelTaskOptions = default)
   {
     var parallelism       = parallelTaskOptions.ParallelismLimit;
     var cancellationToken = parallelTaskOptions.CancellationToken;
@@ -125,8 +125,8 @@ public static class ParallelWaitExt
   /// <typeparam name="T">Return type of the tasks</typeparam>
   /// <returns>Asynchronous results of tasks</returns>
   [PublicAPI]
-  public static async IAsyncEnumerable<T> ParallelWait<T>(this IAsyncEnumerable<Task<T>> enumerable,
-                                                          ParallelTaskOptions            parallelTaskOptions = default)
+  public static async IAsyncEnumerable<T> LowLevelParallelWait<T>(this IAsyncEnumerable<Task<T>> enumerable,
+                                                                  ParallelTaskOptions            parallelTaskOptions = default)
   {
     var parallelism       = parallelTaskOptions.ParallelismLimit;
     var cancellationToken = parallelTaskOptions.CancellationToken;

@@ -29,7 +29,7 @@ public struct ParallelTaskOptions
 {
   private readonly int parallelismLimit_ = 0;
 
-  /// <summary>Limit the parallelism for ParallelSelect and ParallelWait</summary>
+  /// <summary>Limit the parallelism for ParallelSelect</summary>
   public int ParallelismLimit
   {
     get

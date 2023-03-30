@@ -44,7 +44,7 @@ public static class ParallelSelectExt
                                                                           ParallelTaskOptions         parallelTaskOptions,
                                                                           Func<TInput, Task<TOutput>> func)
     => enumerable.Select(func)
-                 .ParallelWait(parallelTaskOptions);
+                 .LowLevelParallelWait(parallelTaskOptions);
 
   /// <summary>
   ///   Iterates over the input enumerable and spawn multiple parallel tasks that call `func`.
@@ -62,7 +62,7 @@ public static class ParallelSelectExt
                                                                           ParallelTaskOptions           parallelTaskOptions,
                                                                           Func<TInput, Task<TOutput>>   func)
     => enumerable.Select(func)
-                 .ParallelWait(parallelTaskOptions);
+                 .LowLevelParallelWait(parallelTaskOptions);
 
   /// <summary>
   ///   Iterates over the input enumerable and spawn multiple parallel tasks that call `func`.
@@ -78,7 +78,7 @@ public static class ParallelSelectExt
   public static IAsyncEnumerable<TOutput> ParallelSelect<TInput, TOutput>(this IEnumerable<TInput>    enumerable,
                                                                           Func<TInput, Task<TOutput>> func)
     => enumerable.Select(func)
-                 .ParallelWait();
+                 .LowLevelParallelWait();
 
   /// <summary>
   ///   Iterates over the input enumerable and spawn multiple parallel tasks that call `func`.
@@ -94,5 +94,5 @@ public static class ParallelSelectExt
   public static IAsyncEnumerable<TOutput> ParallelSelect<TInput, TOutput>(this IAsyncEnumerable<TInput> enumerable,
                                                                           Func<TInput, Task<TOutput>>   func)
     => enumerable.Select(func)
-                 .ParallelWait();
+                 .LowLevelParallelWait();
 }
