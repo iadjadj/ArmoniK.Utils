@@ -22,6 +22,8 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
+using ArmoniK.Utils.LowLevel;
+
 using NUnit.Framework;
 
 namespace ArmoniK.Utils.Tests;
@@ -36,8 +38,9 @@ public class ParallelSelectExtTest
 
   private static IEnumerable ParallelSelectCases()
   {
-    var parallelisms = new[]
+    var parallelisms = new int?[]
                        {
+                         null,
                          -1,
                          0,
                          1,
@@ -50,47 +53,63 @@ public class ParallelSelectExtTest
                   4,
                 };
 
-    TestCaseData Case(bool useAsync,
-                      int  parallelism,
+    TestCaseData Case(bool useLowLevel,
+                      bool useAsync,
+                      int? parallelism,
                       int  size)
-      => new TestCaseData(useAsync,
+      => new TestCaseData(useLowLevel,
+                          useAsync,
                           parallelism,
-                          size).SetArgDisplayNames($"int[{size}], {parallelism}{(useAsync ? ", async" : "")}");
+                          size).SetArgDisplayNames($"int[{size}], {parallelism}{(useAsync ? ", async" : "")}{(useLowLevel ? ", low level" : "")}");
 
-    foreach (var useAsync in Booleans)
+    foreach (var useLowLevel in Booleans)
     {
-      foreach (var parallelism in parallelisms)
+      foreach (var useAsync in Booleans)
       {
-        foreach (var size in sizes)
+        foreach (var parallelism in parallelisms)
         {
-          yield return Case(useAsync,
-                            parallelism,
-                            size);
+          foreach (var size in sizes)
+          {
+            yield return Case(useLowLevel,
+                              useAsync,
+                              parallelism,
+                              size);
+          }
         }
-      }
 
-      yield return Case(useAsync,
-                        -1,
-                        1000);
-      yield return Case(useAsync,
-                        0,
-                        100);
-      yield return Case(useAsync,
-                        1,
-                        10);
-      yield return Case(useAsync,
-                        1,
-                        20);
+        yield return Case(useLowLevel,
+                          useAsync,
+                          null,
+                          100);
+        yield return Case(useLowLevel,
+                          useAsync,
+                          -1,
+                          1000);
+        yield return Case(useLowLevel,
+                          useAsync,
+                          0,
+                          100);
+        yield return Case(useLowLevel,
+                          useAsync,
+                          1,
+                          10);
+        yield return Case(useLowLevel,
+                          useAsync,
+                          1,
+                          20);
+      }
     }
   }
 
   [Test]
   [TestCaseSource(nameof(ParallelSelectCases))]
-  public async Task ParallelSelectShouldSucceed(bool useAsync,
-                                                int  parallelism,
+  public async Task ParallelSelectShouldSucceed(bool useLowLevel,
+                                                bool useAsync,
+                                                int? parallelism,
                                                 int  n)
   {
-    var enumerable = GenerateAndSelect(useAsync,
+    var enumerable = GenerateAndSelect(useLowLevel,
+                                       useAsync,
                                        parallelism,
                                        null,
                                        n,
@@ -106,40 +125,56 @@ public class ParallelSelectExtTest
 
   private static IEnumerable ParallelSelectLimitCases()
   {
-    TestCaseData Case(bool useAsync,
-                      int  parallelism,
+    TestCaseData Case(bool useLowLevel,
+                      bool useAsync,
+                      int? parallelism,
                       int  size)
-      => new TestCaseData(useAsync,
+      => new TestCaseData(useLowLevel,
+                          useAsync,
                           parallelism,
-                          size).SetArgDisplayNames($"int[{size}], {parallelism}{(useAsync ? ", async" : "")}");
+                          size).SetArgDisplayNames($"int[{size}], {parallelism}{(useAsync ? ", async" : "")}{(useLowLevel ? ", low level" : "")}");
 
-    foreach (var useAsync in Booleans)
+    foreach (var useLowLevel in Booleans)
     {
-      yield return Case(useAsync,
-                        0,
-                        100);
-      yield return Case(useAsync,
-                        1,
-                        10);
-      yield return Case(useAsync,
-                        2,
-                        20);
-      yield return Case(useAsync,
-                        10,
-                        100);
-      yield return Case(useAsync,
-                        100,
-                        1000);
-      yield return Case(useAsync,
-                        -1,
-                        10000);
+      foreach (var useAsync in Booleans)
+      {
+        yield return Case(useLowLevel,
+                          useAsync,
+                          null,
+                          100);
+        yield return Case(useLowLevel,
+                          useAsync,
+                          0,
+                          100);
+        yield return Case(useLowLevel,
+                          useAsync,
+                          1,
+                          10);
+        yield return Case(useLowLevel,
+                          useAsync,
+                          2,
+                          20);
+        yield return Case(useLowLevel,
+                          useAsync,
+                          10,
+                          100);
+        yield return Case(useLowLevel,
+                          useAsync,
+                          100,
+                          1000);
+        yield return Case(useLowLevel,
+                          useAsync,
+                          -1,
+                          10000);
+      }
     }
   }
 
   [Test]
   [TestCaseSource(nameof(ParallelSelectLimitCases))]
-  public async Task ParallelSelectLimitShouldSucceed(bool useAsync,
-                                                     int  parallelism,
+  public async Task ParallelSelectLimitShouldSucceed(bool useLowLevel,
+                                                     bool useAsync,
+                                                     int? parallelism,
                                                      int  n)
   {
     var counter    = 0;
@@ -164,7 +199,8 @@ public class ParallelSelectExtTest
       return x;
     }
 
-    var enumerable = GenerateAndSelect(useAsync,
+    var enumerable = GenerateAndSelect(useLowLevel,
+                                       useAsync,
                                        parallelism,
                                        null,
                                        n,
@@ -182,6 +218,7 @@ public class ParallelSelectExtTest
         Assert.That(maxCounter,
                     Is.EqualTo(parallelism));
         break;
+      case null:
       case 0:
         Assert.That(maxCounter,
                     Is.EqualTo(Environment.ProcessorCount));
@@ -193,10 +230,18 @@ public class ParallelSelectExtTest
     }
   }
 
+
+  private static IEnumerable UnorderedCompletionCases()
+    =>
+      from useLowLevel in Booleans
+      from useAsync in Booleans
+      select new TestCaseData(useLowLevel,
+                              useAsync).SetArgDisplayNames($"{(useAsync ? "async " : "")}{(useLowLevel ? "low level" : "")}");
+
   [Test]
-  [TestCase(false)]
-  [TestCase(true)]
-  public async Task UnorderedCompletionShouldSucceed(bool useAsync)
+  [TestCaseSource(nameof(UnorderedCompletionCases))]
+  public async Task UnorderedCompletionShouldSucceed(bool useLowLevel,
+                                                     bool useAsync)
   {
     var firstDone = false;
 
@@ -213,7 +258,8 @@ public class ParallelSelectExtTest
       return true;
     }
 
-    var enumerable = GenerateAndSelect(useAsync,
+    var enumerable = GenerateAndSelect(useLowLevel,
+                                       useAsync,
                                        2,
                                        null,
                                        1000,
@@ -224,20 +270,22 @@ public class ParallelSelectExtTest
                 Is.All.True);
   }
 
-
   private static IEnumerable CancellationCases()
     =>
+      from useLowLevel in Booleans
       from useAsync in Booleans
       from cancellationAware in Booleans
       from cancelLast in Booleans
-      select new TestCaseData(useAsync,
+      select new TestCaseData(useLowLevel,
+                              useAsync,
                               cancellationAware,
                               cancelLast)
-        .SetArgDisplayNames($"{(cancellationAware ? "aware" : "oblivious")}{(cancelLast ? ", last" : "")}{(useAsync ? ", async" : "")}");
+        .SetArgDisplayNames($"{(cancellationAware ? "aware" : "oblivious")}{(cancelLast ? ", last" : "")}{(useAsync ? ", async" : "")}{(useLowLevel ? ", low level" : "")}");
 
   [Test]
   [TestCaseSource(nameof(CancellationCases))]
-  public async Task CancellationShouldSucceed(bool useAsync,
+  public async Task CancellationShouldSucceed(bool useLowLevel,
+                                              bool useAsync,
                                               bool cancellationAware,
                                               bool cancelLast)
   {
@@ -268,7 +316,8 @@ public class ParallelSelectExtTest
       return x;
     }
 
-    var enumerable = GenerateAndSelect(useAsync,
+    var enumerable = GenerateAndSelect(useLowLevel,
+                                       useAsync,
                                        -1,
                                        cts.Token,
                                        cancelLast
@@ -296,7 +345,8 @@ public class ParallelSelectExtTest
 
   [Test]
   [TestCaseSource(nameof(CancellationCases))]
-  public async Task ThrowingShouldSucceed(bool useAsync,
+  public async Task ThrowingShouldSucceed(bool useLowLevel,
+                                          bool useAsync,
                                           bool cancellationAware,
                                           bool throwLast)
   {
@@ -314,7 +364,8 @@ public class ParallelSelectExtTest
       return x;
     }
 
-    var enumerable = GenerateAndSelect(useAsync,
+    var enumerable = GenerateAndSelect(useLowLevel,
+                                       useAsync,
                                        -1,
                                        null,
                                        throwLast
@@ -337,7 +388,8 @@ public class ParallelSelectExtTest
                                                                          .ConfigureAwait(false));
   }
 
-  private static IAsyncEnumerable<T> GenerateAndSelect<T>(bool               useAsync,
+  private static IAsyncEnumerable<T> GenerateAndSelect<T>(bool               useLowLevel,
+                                                          bool               useAsync,
                                                           int?               parallelism,
                                                           CancellationToken? cancellationToken,
                                                           int                n,
@@ -353,18 +405,31 @@ public class ParallelSelectExtTest
                                                                                              c),
                                    };
 
-    return (useAsync, options) switch
+    return (useLowLevel, useAsync, options) switch
            {
-             (false, null) => GenerateInts(n)
+             (false, false, null) => GenerateInts(n)
                .ParallelSelect(f),
-             (false, ParallelTaskOptions opt) => GenerateInts(n)
+             (false, false, ParallelTaskOptions opt) => GenerateInts(n)
                .ParallelSelect(opt,
                                f),
-             (true, null) => GenerateIntsAsync(n)
+             (false, true, null) => GenerateIntsAsync(n)
                .ParallelSelect(f),
-             (true, ParallelTaskOptions opt) => GenerateIntsAsync(n)
+             (false, true, ParallelTaskOptions opt) => GenerateIntsAsync(n)
                .ParallelSelect(opt,
                                f),
+
+             (true, false, null) => GenerateInts(n)
+                                    .Select(f)
+                                    .ParallelWait(),
+             (true, false, ParallelTaskOptions opt) => GenerateInts(n)
+                                                       .Select(f)
+                                                       .ParallelWait(opt),
+             (true, true, null) => GenerateIntsAsync(n)
+                                   .Select(f)
+                                   .ParallelWait(),
+             (true, true, ParallelTaskOptions opt) => GenerateIntsAsync(n)
+                                                      .Select(f)
+                                                      .ParallelWait(opt),
            };
   }
 
