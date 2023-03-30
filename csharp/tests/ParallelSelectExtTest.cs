@@ -90,15 +90,12 @@ public class ParallelSelectExtTest
                                                 int  parallelism,
                                                 int  n)
   {
-    var f = AsyncIdentity(0,
-                          10);
-    var enumerable = useAsync
-                       ? GenerateIntsAsync(n)
-                         .ParallelSelect(new ParallelTaskOptions(parallelism),
-                                         f)
-                       : GenerateInts(n)
-                         .ParallelSelect(new ParallelTaskOptions(parallelism),
-                                         f);
+    var enumerable = GenerateAndSelect(useAsync,
+                                       parallelism,
+                                       null,
+                                       n,
+                                       AsyncIdentity(0,
+                                                     10));
     var x = await enumerable.ToListAsync()
                             .ConfigureAwait(false);
     var y = GenerateInts(n)
@@ -167,14 +164,11 @@ public class ParallelSelectExtTest
       return x;
     }
 
-    var enumerable = useAsync
-                       ? GenerateIntsAsync(n)
-                         .ParallelSelect(new ParallelTaskOptions(parallelism),
-                                         F)
-                       : GenerateInts(n)
-                         .ParallelSelect(new ParallelTaskOptions(parallelism),
-                                         F);
-
+    var enumerable = GenerateAndSelect(useAsync,
+                                       parallelism,
+                                       null,
+                                       n,
+                                       F);
     var x = await enumerable.ToListAsync()
                             .ConfigureAwait(false);
     var y = GenerateInts(n)
@@ -219,13 +213,11 @@ public class ParallelSelectExtTest
       return true;
     }
 
-    var enumerable = useAsync
-                       ? GenerateIntsAsync(1000)
-                         .ParallelSelect(new ParallelTaskOptions(2),
-                                         F)
-                       : GenerateInts(1000)
-                         .ParallelSelect(new ParallelTaskOptions(2),
-                                         F);
+    var enumerable = GenerateAndSelect(useAsync,
+                                       2,
+                                       null,
+                                       1000,
+                                       F);
     var x = await enumerable.ToListAsync()
                             .ConfigureAwait(false);
     Assert.That(x,
@@ -276,22 +268,13 @@ public class ParallelSelectExtTest
       return x;
     }
 
-    var enumerable = useAsync
-                       ? GenerateInts(cancelLast
-                                        ? cancelAt + 1
-                                        : 100000)
-                         .ParallelSelect(new ParallelTaskOptions(-1,
-                                                                 cts.Token),
-                                         F)
-                       : GenerateIntsAsync(cancelLast
-                                             ? cancelAt + 1
-                                             : 100000,
-                                           0,
-                                           CancellationToken.None)
-                         .ParallelSelect(new ParallelTaskOptions(-1,
-                                                                 cts.Token),
-                                         F);
-
+    var enumerable = GenerateAndSelect(useAsync,
+                                       -1,
+                                       cts.Token,
+                                       cancelLast
+                                         ? cancelAt + 1
+                                         : 100000,
+                                       F);
     Assert.ThrowsAsync<TaskCanceledException>(async () =>
                                               {
                                                 await foreach (var _ in enumerable.WithCancellation(CancellationToken.None))
@@ -331,19 +314,13 @@ public class ParallelSelectExtTest
       return x;
     }
 
-    var enumerable = useAsync
-                       ? GenerateInts(throwLast
-                                        ? throwAt + 1
-                                        : 100000)
-                         .ParallelSelect(new ParallelTaskOptions(-1),
-                                         F)
-                       : GenerateIntsAsync(throwLast
-                                             ? throwAt + 1
-                                             : 100000,
-                                           0,
-                                           CancellationToken.None)
-                         .ParallelSelect(new ParallelTaskOptions(-1),
-                                         F);
+    var enumerable = GenerateAndSelect(useAsync,
+                                       -1,
+                                       null,
+                                       throwLast
+                                         ? throwAt + 1
+                                         : 100000,
+                                       F);
 
     await using var enumerator = enumerable.GetAsyncEnumerator();
 
@@ -358,6 +335,37 @@ public class ParallelSelectExtTest
 
     Assert.ThrowsAsync<ApplicationException>(async () => await enumerator.MoveNextAsync()
                                                                          .ConfigureAwait(false));
+  }
+
+  private static IAsyncEnumerable<T> GenerateAndSelect<T>(bool               useAsync,
+                                                          int?               parallelism,
+                                                          CancellationToken? cancellationToken,
+                                                          int                n,
+                                                          Func<int, Task<T>> f)
+  {
+    // ReSharper disable function ConvertTypeCheckPatternToNullCheck
+    ParallelTaskOptions? options = (parallelism, cancellationToken) switch
+                                   {
+                                     (null, null)                => null,
+                                     (int p, null)               => new ParallelTaskOptions(p),
+                                     (null, CancellationToken c) => new ParallelTaskOptions(c),
+                                     (int p, CancellationToken c) => new ParallelTaskOptions(p,
+                                                                                             c),
+                                   };
+
+    return (useAsync, options) switch
+           {
+             (false, null) => GenerateInts(n)
+               .ParallelSelect(f),
+             (false, ParallelTaskOptions opt) => GenerateInts(n)
+               .ParallelSelect(opt,
+                               f),
+             (true, null) => GenerateIntsAsync(n)
+               .ParallelSelect(f),
+             (true, ParallelTaskOptions opt) => GenerateIntsAsync(n)
+               .ParallelSelect(opt,
+                               f),
+           };
   }
 
   private static IEnumerable<int> GenerateInts(int n)
