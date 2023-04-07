@@ -55,8 +55,8 @@ jobs:
         submodules: true
 
     - name: Build the package
-        run: |
-          dotnet build ArmoniK.Utils.sln -c Release -p:Version=1.0.0
+      run: |
+         dotnet build ArmoniK.Utils.sln -c Release -p:Version=1.0.0
     - name: Pack the package VERSION
       run: |
         dotnet pack ArmoniK.Utils.sln -c Release -o /tmp/packages -p:Version=1.0.0
