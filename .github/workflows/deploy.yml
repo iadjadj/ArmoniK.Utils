@@ -1,0 +1,110 @@
+name: Deploy
+
+on:
+  push:
+    branches:[ '**' ]'
+
+jobs:
+
+ format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ github.ref }}
+        fetch-depth: 0
+        submodules: true
+
+    - name: Install ReSharper
+      run: |
+        dotnet tool install -g JetBrains.ReSharper.GlobalTools --version 2022.2.2
+
+    - name: Restore
+      run: |
+        dotnet restore ArmoniK.Utils.sln
+
+    - name: Reformat
+      run: |
+        jb cleanupcode ArmoniK.Utils.sln
+
+    - name: Check Diff
+      id: check-diff
+      run: |
+        DIFF="$(git diff --name-only)"
+
+        if [ -z "$DIFF" ]; then
+          echo "OK: Format is clean"
+        else
+          echo "Error: Format was not clean"
+          echo "List of files:"
+          echo "$DIFF"
+          git diff
+          exit 1
+        fi
+
+ build: 
+    env:
+      GENVERSION: ${{ needs.versionning.outputs.version }}   
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ github.ref }}
+        fetch-depth: 0
+        submodules: true
+
+    - name: Build the package
+        run: |
+          dotnet build ArmoniK.Utils.sln -c Release -p:Version=$GENVERSION
+    - name: Pack the package VERSION
+      run: |
+        dotnet pack ArmoniK.Utils.sln -c Release -o /tmp/packages -p:Version=$GENVERSION
+        
+    - name: Push the package
+      run: |
+        find /tmp/packages -name 'ArmoniK*.nupkg' ! -name '*test*.nupkg' -exec dotnet nuget push {} -k ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate --no-symbols \;
+
+
+
+ test: 
+    needs:
+      - build
+    env:
+      GENVERSION: ${{ needs.versionning.outputs.version }}  
+    runs-on: ubuntu-latest 
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ github.ref }}
+        fetch-depth: 0
+        submodules: true
+
+    - name: Run EndToEnd.Tests
+      timeout-minutes: 15
+      run: |
+        cd Tests
+        mkdir -p ${HOME}/data
+        bash -x ./endToEndTests.sh -b -d
+        cd -
+
+    - name: Run tests
+      run: |
+        kubectl get svc -n armonik -o wide
+        export CPIP=$(kubectl get svc ingress -n armonik -o jsonpath="{.status.loadBalancer.ingress[0]."ip"}")
+        export CPHOST=$(kubectl get svc ingress -n armonik -o jsonpath="{.status.loadBalancer.ingress[0]."hostname"}")
+        export CPIP=${CPHOST:-$CPIP}
+        export CPPort=$(kubectl get svc ingress -n armonik -o custom-columns="PORT:.spec.ports[1].port" --no-headers=true)
+        export Grpc__Endpoint=http://$CPIP:$CPPort
+        dotnet test --runtime linux-x64 -f net6.0 --logger "trx;LogFileName=test-results.trx"
+  
+    - name: Test Report
+      uses: dorny/test-reporter@v1
+      if: success() || failure()
+      with:
+        name: IntegrationTests
+        path: ./Tests/ArmoniK.EndToEndTests/ArmoniK.EndToEndTests.Client/TestResults/test-results.trx
+        reporter: dotnet-trx
