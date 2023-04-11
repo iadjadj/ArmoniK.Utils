@@ -101,8 +101,10 @@ public class TaskExtTest
                               n);
     }
 
-    var task = Gen().ToListAsync();
-    Assert.That(task.IsCompleted, Is.False);
+    var task = Gen()
+      .ToListAsync();
+    Assert.That(task.IsCompleted,
+                Is.False);
 
     var results = await task;
 
