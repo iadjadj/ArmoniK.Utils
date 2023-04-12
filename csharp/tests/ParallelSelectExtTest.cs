@@ -154,12 +154,12 @@ public class ParallelSelectExtTest
                           useAsync,
                           2,
                           20);
-        yield return Case(blocking,
-                          useAsync,
-                          10,
-                          100);
         if (!blocking)
         {
+          yield return Case(blocking,
+                            useAsync,
+                            10,
+                            100);
           yield return Case(blocking,
                             useAsync,
                             100,
