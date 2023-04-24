@@ -157,7 +157,7 @@ public static class ParallelSelectExt
     var semAcquire = sem.WaitAsync(cts.Token);
 
     // Manual enumeration allow for overlapping gets and yields
-    await using var enumerator = enumerable.GetAsyncEnumerator(cts.Token);
+    var enumerator = enumerable.GetAsyncEnumerator(cts.Token);
 
     Task<bool> MoveNext()
       => enumerator.MoveNextAsync()
@@ -253,6 +253,8 @@ public static class ParallelSelectExt
 
     // Dispose should be done only on the successful path.
     // Otherwise, semaphore might be used by some background tasks.
+    await enumerator.DisposeAsync()
+                    .ConfigureAwait(false);
     sem.Dispose();
     cts.Dispose();
   }
