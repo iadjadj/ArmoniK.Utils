@@ -127,23 +127,4 @@ public sealed class Deferrer : IDisposable, IAsyncDisposable
 
   ~Deferrer()
     => Dispose();
-
-
-  /// <summary>
-  ///   Constructs a Disposable object that calls <paramref name="deferred" /> when disposed
-  /// </summary>
-  /// <param name="deferred">Action to be called at Dispose time</param>
-  /// <returns>Disposable object that calls deferred action when disposed</returns>
-  [PublicAPI]
-  public static IDisposable Create(Action deferred)
-    => new Deferrer(deferred);
-
-  /// <summary>
-  ///   Constructs an AsyncDisposable object that calls <paramref name="deferred" /> when disposed
-  /// </summary>
-  /// <param name="deferred">Function to be called at Dispose time</param>
-  /// <returns>Disposable object that calls deferred action when disposed</returns>
-  [PublicAPI]
-  public static IAsyncDisposable Create(Func<ValueTask> deferred)
-    => new Deferrer(deferred);
 }
