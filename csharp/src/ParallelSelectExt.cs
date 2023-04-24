@@ -47,14 +47,14 @@ public static class ParallelSelectExt
     var cancellationToken = parallelTaskOptions.CancellationToken;
 
     // CancellationTokenSource used to cancel all tasks inflight upon errors
-    using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+    var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
     // Queue of tasks
     var queue = new Queue<Task<TOutput>>();
     // Semaphore to limit the parallelism
     // Semaphore is created with one resource already acquired
-    using var sem = new SemaphoreSlim(parallelism - 1,
-                                      parallelism);
+    var sem = new SemaphoreSlim(parallelism - 1,
+                                parallelism);
 
     // Iterate over the enumerable
     foreach (var x in enumerable)
@@ -88,7 +88,7 @@ public static class ParallelSelectExt
                                     .ConfigureAwait(false);
 
         // If there is an error or cancellation has been requested, we must throw the exception
-        which.ThrowIfError();
+        which.ThrowIfError(cts);
 
         // Semaphore has been acquired so we can enqueue a new task
         if (ReferenceEquals(which,
@@ -117,6 +117,11 @@ public static class ParallelSelectExt
         yield return await task.ConfigureAwait(false);
       }
     }
+
+    // Dispose should be done only on the successful path.
+    // Otherwise, semaphore might be used by some background tasks.
+    sem.Dispose();
+    cts.Dispose();
   }
 
   /// <summary>
@@ -139,14 +144,14 @@ public static class ParallelSelectExt
     var cancellationToken = parallelTaskOptions.CancellationToken;
 
     // CancellationTokenSource used to cancel all tasks inflight upon errors
-    using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+    var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
     // Queue of tasks
     var queue = new Queue<Task<TOutput>>();
     // Semaphore to limit the parallelism
     // Semaphore is created with one resource already acquired
-    using var sem = new SemaphoreSlim(parallelism - 1,
-                                      parallelism);
+    var sem = new SemaphoreSlim(parallelism - 1,
+                                parallelism);
 
     // Prepare acquire of the semaphore
     var semAcquire = sem.WaitAsync(cts.Token);
@@ -245,6 +250,11 @@ public static class ParallelSelectExt
         yield return await task.ConfigureAwait(false);
       }
     }
+
+    // Dispose should be done only on the successful path.
+    // Otherwise, semaphore might be used by some background tasks.
+    sem.Dispose();
+    cts.Dispose();
   }
 
   /// <summary>
