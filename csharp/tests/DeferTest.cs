@@ -1,6 +1,6 @@
 ﻿// This file is part of the ArmoniK project
 //
-// Copyright (C) ANEO, 2022-2022. All rights reserved.
+// Copyright (C) ANEO, 2022-2023.All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License")
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,9 @@ namespace ArmoniK.Utils.Tests;
 
 public class DeferTest
 {
+  ////////////////////////////
+  // Synchronous Disposable //
+  ////////////////////////////
   [Test]
   public void DeferEmptyShouldWork()
   {
@@ -31,10 +34,14 @@ public class DeferTest
   }
 
   [Test]
-  public void DeferShouldWork()
+  [TestCase(false)]
+  [TestCase(true)]
+  public void DeferShouldWork(bool async)
   {
     var i = 1;
-    using (Deferrer.Create(() => i += 1))
+    using (DisposableCreate(async,
+                            0,
+                            () => i += 1))
     {
       Assert.That(i,
                   Is.EqualTo(1));
@@ -46,11 +53,15 @@ public class DeferTest
 
 
   [Test]
-  public void RedundantDeferShouldWork()
+  [TestCase(false)]
+  [TestCase(true)]
+  public void RedundantDeferShouldWork(bool async)
   {
     var i = 1;
 
-    var defer = Deferrer.Create(() => i += 1);
+    var defer = DisposableCreate(async,
+                                 0,
+                                 () => i += 1);
 
     Assert.That(i,
                 Is.EqualTo(1));
@@ -67,15 +78,15 @@ public class DeferTest
   }
 
   [Test]
-  public async Task DeferShouldBeRaceConditionFree()
+  [TestCase(false)]
+  [TestCase(true)]
+  public async Task DeferShouldBeRaceConditionFree(bool async)
   {
     var i = 1;
 
-    var defer = Deferrer.Create(() =>
-                                {
-                                  Thread.Sleep(100);
-                                  Interlocked.Increment(ref i);
-                                });
+    var defer = DisposableCreate(async,
+                                 100,
+                                 () => Interlocked.Increment(ref i));
 
     var task1 = Task.Run(() => defer.Dispose());
     var task2 = Task.Run(() => defer.Dispose());
@@ -88,12 +99,16 @@ public class DeferTest
   }
 
   [Test]
-  public void RedundantCopyDeferShouldWork()
+  [TestCase(false)]
+  [TestCase(true)]
+  public void RedundantCopyDeferShouldWork(bool async)
   {
     var i = 1;
 
     {
-      using var defer1 = Deferrer.Create(() => i += 1);
+      using var defer1 = DisposableCreate(async,
+                                          100,
+                                          () => i += 1);
       using var defer2 = defer1;
 
       Assert.That(i,
@@ -108,7 +123,9 @@ public class DeferTest
     => new(f());
 
   [Test]
-  public void DeferShouldWorkWhenCollected()
+  [TestCase(false)]
+  [TestCase(true)]
+  public void DeferShouldWorkWhenCollected(bool async)
   {
     var i = 1;
 
@@ -116,7 +133,9 @@ public class DeferTest
 
     var weakRef = WeakRefDisposable(() =>
                                     {
-                                      reference = Deferrer.Create(() => i += 1);
+                                      reference = DisposableCreate(async,
+                                                                   0,
+                                                                   () => i += 1);
                                       return reference;
                                     });
 
@@ -141,10 +160,14 @@ public class DeferTest
   }
 
   [Test]
-  public void WrappedDeferShouldWork()
+  [TestCase(false)]
+  [TestCase(true)]
+  public void WrappedDeferShouldWork(bool async)
   {
     var i = 1;
-    using (new DisposableWrapper(Deferrer.Create(() => i += 1)))
+    using (new DisposableWrapper(DisposableCreate(async,
+                                                  0,
+                                                  () => i += 1)))
     {
       Assert.That(i,
                   Is.EqualTo(1));
@@ -154,9 +177,225 @@ public class DeferTest
                 Is.EqualTo(2));
   }
 
+  /////////////////////////////
+  // Asynchronous Disposable //
+  /////////////////////////////
+  [Test]
+  public async Task AsyncDeferEmptyShouldWork()
+  {
+    await using var defer = Deferrer.Empty;
+  }
+
+  [Test]
+  [TestCase(false)]
+  [TestCase(true)]
+  public async Task AsyncDeferShouldWork(bool async)
+  {
+    var i = 1;
+    await using (AsyncDisposableCreate(async,
+                                       0,
+                                       () => i += 1))
+    {
+      Assert.That(i,
+                  Is.EqualTo(1));
+    }
+
+    Assert.That(i,
+                Is.EqualTo(2));
+  }
+
+
+  [Test]
+  [TestCase(false)]
+  [TestCase(true)]
+  public async Task RedundantAsyncDeferShouldWork(bool async)
+  {
+    var i = 1;
+
+    var defer = AsyncDisposableCreate(async,
+                                      0,
+                                      () => i += 1);
+
+    Assert.That(i,
+                Is.EqualTo(1));
+
+    await defer.DisposeAsync()
+               .ConfigureAwait(false);
+
+    Assert.That(i,
+                Is.EqualTo(2));
+
+    await defer.DisposeAsync()
+               .ConfigureAwait(false);
+
+    Assert.That(i,
+                Is.EqualTo(2));
+  }
+
+  [Test]
+  [TestCase(false)]
+  [TestCase(true)]
+  public async Task AsyncDeferShouldBeRaceConditionFree(bool async)
+  {
+    var i = 1;
+
+    var defer = AsyncDisposableCreate(async,
+                                      100,
+                                      () => Interlocked.Increment(ref i));
+
+    var task1 = Task.Run(async () => await defer.DisposeAsync()
+                                                .ConfigureAwait(false));
+    var task2 = Task.Run(async () => await defer.DisposeAsync()
+                                                .ConfigureAwait(false));
+
+    await task1;
+    await task2;
+
+    Assert.That(i,
+                Is.EqualTo(2));
+  }
+
+  [Test]
+  [TestCase(false)]
+  [TestCase(true)]
+  public async Task RedundantCopyAsyncDeferShouldWork(bool async)
+  {
+    var i = 1;
+
+    {
+      await using var defer1 = AsyncDisposableCreate(async,
+                                                     100,
+                                                     () => i += 1);
+      await using var defer2 = defer1;
+
+      Assert.That(i,
+                  Is.EqualTo(1));
+    }
+
+    Assert.That(i,
+                Is.EqualTo(2));
+  }
+
+  private static WeakReference WeakRefAsyncDisposable(Func<IAsyncDisposable> f)
+    => new(f());
+
+  [Test]
+  [TestCase(false)]
+  [TestCase(true)]
+  public void AsyncDeferShouldWorkWhenCollected(bool async)
+  {
+    var i = 1;
+
+    IAsyncDisposable reference;
+
+    var weakRef = WeakRefAsyncDisposable(() =>
+                                         {
+                                           reference = AsyncDisposableCreate(async,
+                                                                             0,
+                                                                             () => i += 1);
+                                           return reference;
+                                         });
+
+    GC.Collect();
+    GC.WaitForPendingFinalizers();
+
+    Assert.That(weakRef.IsAlive,
+                Is.True);
+    Assert.That(i,
+                Is.EqualTo(1));
+
+    reference = Deferrer.Empty;
+
+    GC.Collect();
+    GC.WaitForPendingFinalizers();
+
+    Assert.That(weakRef.IsAlive,
+                Is.False);
+
+    Assert.That(i,
+                Is.EqualTo(2));
+  }
+
+  [Test]
+  [TestCase(false)]
+  [TestCase(true)]
+  public async Task WrappedAsyncDeferShouldWork(bool async)
+  {
+    var i = 1;
+    await using (new AsyncDisposableWrapper(AsyncDisposableCreate(async,
+                                                                  0,
+                                                                  () => i += 1)))
+    {
+      Assert.That(i,
+                  Is.EqualTo(1));
+    }
+
+    Assert.That(i,
+                Is.EqualTo(2));
+  }
+
+  private static Deferrer DeferrerCreate(bool   async,
+                                         int    delay,
+                                         Action f)
+  {
+    if (async)
+    {
+      return new Deferrer(async () =>
+                          {
+                            if (delay > 0)
+                            {
+                              await Task.Delay(delay);
+                            }
+                            else
+                            {
+                              await Task.Yield();
+                            }
+
+                            f();
+                          });
+    }
+
+    return new Deferrer(() =>
+                        {
+                          if (delay > 0)
+                          {
+                            Thread.Sleep(delay);
+                          }
+                          else
+                          {
+                            Thread.Yield();
+                          }
+
+                          f();
+                        });
+  }
+
+  private static IDisposable DisposableCreate(bool   async,
+                                              int    delay,
+                                              Action f)
+    => DeferrerCreate(async,
+                      delay,
+                      f);
+
+  private static IAsyncDisposable AsyncDisposableCreate(bool   async,
+                                                        int    delay,
+                                                        Action f)
+    => DeferrerCreate(async,
+                      delay,
+                      f);
+
+  ///////////
+  // Utils //
+  ///////////
   private record DisposableWrapper(IDisposable Disposable) : IDisposable
   {
     public void Dispose()
       => Disposable.Dispose();
+  }
+
+  private record AsyncDisposableWrapper(IAsyncDisposable AsyncDisposable) : IAsyncDisposable
+  {
+    public ValueTask DisposeAsync()
+      => AsyncDisposable.DisposeAsync();
   }
 }
