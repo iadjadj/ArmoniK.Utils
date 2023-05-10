@@ -1,12 +1,11 @@
-"prCreation": {
-    "semanticCommits": false,
-    "combineNonMajor": true,
-    "replaceTitle": "Update dependencies",
-    "replaceLabels": [
-        "dependencies"
-    ],
-    "labels": [
-        "dependencies",
-        "automerge"
-    ]
+"prCreation": 
+  {
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "enabled": true,
+  "packageRules": [
+    {
+      "groupName": "All non-major go dependencies",
+      "matchUpdateTypes": ["minor", "patch"],
+    }
+  ]
 }
