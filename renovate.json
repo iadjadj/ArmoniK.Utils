@@ -1,14 +1,12 @@
-{
-    "forkProcessing": "enabled",
-    
-    "schedule": [ "every weekday" ],
-    
-    "packageRules": [
-      {
-        "description": "Group all packages into single PRs to reduce noise",
-        "matchFiles": ["*ArmoniK*.csproj"],
-        "groupName": "Armonik dependencies",
-        "excludePackageNames": ["^Microsoft", "^NUnit"]
-      }
+"prCreation": {
+    "semanticCommits": false,
+    "combineNonMajor": true,
+    "replaceTitle": "Update dependencies",
+    "replaceLabels": [
+        "dependencies"
+    ],
+    "labels": [
+        "dependencies",
+        "automerge"
     ]
-  }
+}
