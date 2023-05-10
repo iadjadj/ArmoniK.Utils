@@ -11,6 +11,5 @@
         "groupName": "Armonik dependencies",
         "excludePackageNames": ["^Microsoft\\.", "^System\\."]
       }
-      }
     ]
   }
