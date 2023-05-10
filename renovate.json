@@ -5,11 +5,10 @@
     
     "packageRules": [
       {
+        "description": "Group all packages into single PRs to reduce noise",
         "matchFiles": ["*ArmoniK*.csproj"],
-        "description": "Group all Armonik packages into single PRs to reduce noise",
-        "matchPackagePrefixes": ["ArmoniK"],
         "groupName": "Armonik dependencies",
-        "excludePackageNames": ["^Microsoft\\.", "^System\\."]
+        "excludePackageNames": ["^Microsoft", "^NUnit"]
       }
     ]
   }
